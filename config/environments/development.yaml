@@ -1,0 +1,31 @@
+version: "1.0"
+description: "开发环境配置"
+
+# 开发环境特定配置
+database:
+  main:
+    host: "localhost"
+    port: 6379
+    database: "0"
+    debug: true
+
+logging:
+  level: "DEBUG"
+  console_output: true
+
+agents:
+  supply_chain:
+    parameters:
+      temperature: 0.7
+      max_tokens: 1000
+      debug: true
+  unified:
+    parameters:
+      temperature: 0.7
+      max_tokens: 1000
+      debug: true
+
+# 开发环境特定设置
+debug_mode: true
+mock_external_services: true
+enable_test_endpoints: true

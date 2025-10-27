@@ -1,0 +1,55 @@
+name: Code Quality Check
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements/base.txt
+        pip install black isort mypy flake8
+        
+    - name: Check code formatting with black
+      run: black --check --diff src/ tests/
+      
+    - name: Check import sorting with isort
+      run: isort --check-only --diff src/ tests/
+      
+    - name: Lint with flake8
+      run: flake8 src/ tests/
+      
+    - name: Type checking with mypy
+      run: mypy src/ || true  # Allow mypy to fail for now
+      
+    - name: Check for complex functions
+      run: |
+        pip install radon
+        radon cc src/ --min B
+        
+    - name: Check for maintainability issues
+      run: |
+        radon mi src/ --min B
+        
+    - name: Security scan with bandit
+      run: bandit -r src/ -f json -o bandit-report.json || true
+      
+    - name: Upload bandit report
+      uses: actions/upload-artifact@v3
+      with:
+        name: bandit-report
+        path: bandit-report.json

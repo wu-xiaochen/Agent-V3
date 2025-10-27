@@ -1,0 +1,162 @@
+{
+  "version": "1.0",
+  "description": "智能体工具配置示例",
+  "tools": [
+    {
+      "type": "builtin",
+      "name": "time",
+      "description": "获取当前时间",
+      "enabled": true
+    },
+    {
+      "type": "builtin",
+      "name": "search",
+      "description": "网络搜索工具",
+      "enabled": true
+    },
+    {
+      "type": "builtin",
+      "name": "calculator",
+      "description": "数学计算工具",
+      "enabled": true
+    },
+    {
+      "type": "api",
+      "name": "weather_api",
+      "description": "天气查询API",
+      "url": "https://api.openweathermap.org/data/2.5/weather",
+      "method": "GET",
+      "auth_type": "api_key",
+      "auth_config": {
+        "key": "${WEATHER_API_KEY}",
+        "header": "X-API-Key"
+      },
+      "parameters": {
+        "q": {
+          "type": "string",
+          "description": "城市名称",
+          "required": true
+        },
+        "units": {
+          "type": "string",
+          "description": "单位系统 (metric, imperial, kelvin)",
+          "default": "metric"
+        },
+        "lang": {
+          "type": "string",
+          "description": "语言代码",
+          "default": "zh_cn"
+        }
+      },
+      "response_mapping": {
+        "temperature": "$.main.temp",
+        "humidity": "$.main.humidity",
+        "description": "$.weather[0].description",
+        "city": "$.name",
+        "country": "$.sys.country"
+      }
+    },
+    {
+      "type": "api",
+      "name": "github_api",
+      "description": "GitHub API工具",
+      "url": "https://api.github.com",
+      "method": "GET",
+      "auth_type": "bearer",
+      "auth_config": {
+        "token": "${GITHUB_TOKEN}"
+      },
+      "parameters": {
+        "endpoint": {
+          "type": "string",
+          "description": "API端点路径",
+          "required": true
+        },
+        "query": {
+          "type": "object",
+          "description": "查询参数",
+          "default": {}
+        }
+      },
+      "response_mapping": {
+        "data": "$"
+      }
+    },
+    {
+      "type": "mcp",
+      "name": "n8n_workflow",
+      "description": "N8N工作流执行工具",
+      "server_url": "http://localhost:5678",
+      "tool_name": "execute_workflow",
+      "auth_type": "bearer",
+      "auth_config": {
+        "token": "${N8N_API_TOKEN}"
+      },
+      "parameters": {
+        "workflow_id": {
+          "type": "string",
+          "description": "工作流ID",
+          "required": true
+        },
+        "data": {
+          "type": "object",
+          "description": "输入数据",
+          "default": {}
+        }
+      },
+      "response_mapping": {
+        "result": "$.result.data",
+        "execution_id": "$.executionId",
+        "status": "$.result.status"
+      }
+    },
+    {
+      "type": "mcp",
+      "name": "slack_mcp",
+      "description": "Slack消息发送工具",
+      "server_url": "https://slack-mcp.example.com",
+      "tool_name": "send_message",
+      "auth_type": "api_key",
+      "auth_config": {
+        "key": "${SLACK_API_KEY}",
+        "header": "Authorization"
+      },
+      "parameters": {
+        "channel": {
+          "type": "string",
+          "description": "频道ID或名称",
+          "required": true
+        },
+        "message": {
+          "type": "string",
+          "description": "消息内容",
+          "required": true
+        },
+        "thread_ts": {
+          "type": "string",
+          "description": "回复线程时间戳",
+          "required": false
+        }
+      },
+      "response_mapping": {
+        "success": "$.ok",
+        "timestamp": "$.ts",
+        "channel": "$.channel"
+      }
+    }
+  ],
+  "tool_groups": {
+    "basic": ["time", "search", "calculator"],
+    "external_apis": ["weather_api", "github_api"],
+    "mcp_tools": ["n8n_workflow", "slack_mcp"],
+    "all": ["time", "search", "calculator", "weather_api", "github_api", "n8n_workflow", "slack_mcp"]
+  },
+  "agent_tool_mapping": {
+    "unified_agent": ["time", "search", "calculator", "weather_api"],
+    "api_agent": ["weather_api", "github_api"],
+    "mcp_agent": ["n8n_workflow", "slack_mcp"],
+    "dev_agent": ["time", "search", "calculator", "github_api"],
+    "notification_agent": ["time", "slack_mcp"],
+    "full_stack_agent": ["time", "search", "calculator", "weather_api", "github_api", "n8n_workflow", "slack_mcp"]
+  }
+}

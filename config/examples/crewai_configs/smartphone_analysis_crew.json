@@ -1,0 +1,74 @@
+{
+  "business_process": "智能手机产品开发与市场分析",
+  "crewai_config": {
+    "name": "智能手机分析团队",
+    "description": "专注于智能手机产品开发、市场分析和竞争策略的专业团队",
+    "agents": [
+      {
+        "name": "产品分析师",
+        "role": "负责智能手机产品功能分析和技术评估",
+        "goal": "分析智能手机产品特性，评估技术优势和市场竞争力",
+        "backstory": "你是一位资深的产品分析师，拥有超过8年的智能手机行业经验，精通各种移动设备技术规格和市场趋势。",
+        "tools": ["search"],
+        "verbose": true,
+        "allow_delegation": false,
+        "max_iter": 25,
+        "max_rpm": 1000
+      },
+      {
+        "name": "市场研究员",
+        "role": "负责智能手机市场趋势和消费者行为研究",
+        "goal": "研究市场动态，分析消费者需求，预测市场趋势",
+        "backstory": "你是一位专业的市场研究员，擅长使用数据分析工具研究消费者行为和市场趋势，对智能手机市场有深入了解。",
+        "tools": ["search"],
+        "verbose": true,
+        "allow_delegation": false,
+        "max_iter": 25,
+        "max_rpm": 1000
+      },
+      {
+        "name": "竞争策略专家",
+        "role": "负责分析竞争对手和制定竞争策略",
+        "goal": "分析竞争对手的产品和策略，提出有效的竞争应对方案",
+        "backstory": "你是一位经验丰富的竞争策略专家，曾为多家科技公司提供战略咨询，对智能手机市场竞争格局有独到见解。",
+        "tools": ["search"],
+        "verbose": true,
+        "allow_delegation": false,
+        "max_iter": 25,
+        "max_rpm": 1000
+      }
+    ],
+    "tasks": [
+      {
+        "name": "产品特性分析",
+        "description": "分析当前主流智能手机产品的技术特性和创新点",
+        "agent": "产品分析师",
+        "expected_output": "详细的产品特性分析报告，包括技术规格、创新点和优缺点评估",
+        "context": [],
+        "tools": ["search"]
+      },
+      {
+        "name": "市场趋势研究",
+        "description": "研究当前智能手机市场趋势和消费者偏好变化",
+        "agent": "市场研究员",
+        "expected_output": "市场趋势研究报告，包括消费者需求变化、市场规模预测和新兴趋势",
+        "context": ["产品特性分析"],
+        "tools": ["search"]
+      },
+      {
+        "name": "竞争策略制定",
+        "description": "基于产品分析和市场研究，制定有效的竞争策略",
+        "agent": "竞争策略专家",
+        "expected_output": "全面的竞争策略方案，包括市场定位、产品差异化和营销策略建议",
+        "context": ["产品特性分析", "市场趋势研究"],
+        "tools": ["search"]
+      }
+    ],
+    "process": "hierarchical",
+    "manager_role": null,
+    "verbose": true,
+    "memory": true
+  },
+  "generated_at": "2025-10-27T12:00:00.000000",
+  "version": "1.0"
+}

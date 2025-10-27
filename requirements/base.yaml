@@ -1,0 +1,15 @@
+# 基础依赖
+langchain>=0.0.200
+langchain-openai>=0.0.2
+openai>=1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+redis>=4.5.0
+crewai>=0.1.0
+crewai-tools>=0.0.1
+python-dotenv>=1.0.0
+PyYAML>=6.0
+
+# 日志和监控
+structlog>=23.1.0
+rich>=13.0.0

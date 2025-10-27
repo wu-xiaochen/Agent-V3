@@ -1,0 +1,41 @@
+version: "1.0"
+description: "生产环境配置"
+
+# 继承基础配置
+extends: "../base/database.yaml"
+
+# 生产环境特定配置
+database:
+  main:
+    host: "${DB_HOST}"
+    port: "${DB_PORT}"
+    database: "${DB_NAME}"
+    ssl_enabled: true
+    connection_pool_size: 20
+
+logging:
+  level: "WARNING"
+  console_output: false
+  file_rotation: true
+  max_file_size: "100MB"
+  backup_count: 10
+
+agents:
+  supply_chain:
+    parameters:
+      temperature: 0.5
+      max_tokens: 2000
+      debug: false
+  unified:
+    parameters:
+      temperature: 0.5
+      max_tokens: 2000
+      debug: false
+
+# 生产环境特定设置
+debug_mode: false
+mock_external_services: false
+enable_test_endpoints: false
+security_headers: true
+rate_limiting: true
+monitoring_enabled: true

@@ -1,0 +1,156 @@
+version: "1.0"
+description: "Agent服务配置"
+
+services:
+  llm:
+    provider: "siliconflow"
+    api_key: "${SILICONFLOW_API_KEY}"
+    base_url: "https://api.siliconflow.cn/v1"
+    default_model: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
+    timeout: 30
+    retry_count: 3
+    openai:
+      model: "gpt-4"
+      temperature: 0.7
+      max_tokens: 1000
+      api_key: "${OPENAI_API_KEY}"
+      organization: "${OPENAI_ORGANIZATION:}"
+    azure:
+      model: "gpt-4"
+      temperature: 0.7
+      max_tokens: 1000
+      api_key: "${AZURE_OPENAI_API_KEY}"
+      api_base: "${AZURE_OPENAI_API_BASE}"
+      api_version: "2023-07-01-preview"
+      deployment_name: "${AZURE_OPENAI_DEPLOYMENT_NAME}"
+    anthropic:
+      model: "claude-3-opus-20240229"
+      temperature: 0.7
+      max_tokens: 1000
+      api_key: "${ANTHROPIC_API_KEY}"
+  
+  
+  redis:
+    host: "localhost"
+    port: 6379
+    db: 0
+    password: "${REDIS_PASSWORD:}"
+    connection_pool_size: 10
+    socket_timeout: 5
+    socket_connect_timeout: 5
+    retry_on_timeout: true
+    health_check_interval: 30
+  
+  crewai:
+    enabled: true
+    default_model: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
+    max_agents: 10
+    max_tasks: 20
+    execution_timeout: 300
+    manager_llm: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
+    agent_llm: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
+    max_iter: 5
+    cache: true
+    verbose: true
+    process: "hierarchical"  # hierarchical, sequential
+    manager_agent: true
+  
+  embedding:
+    provider: "huggingface"  # openai, azure, huggingface
+    model: "BAAI/bge-m3"
+    api_key: "${HUGGINGFACE_API_KEY:}"
+    dimension: 1024
+    batch_size: 100
+    max_retries: 3
+    timeout: 30
+  
+  vector_store:
+    provider: "chromadb"  # chromadb, faiss, pinecone
+    chromadb:
+      path: "./data/vector_store"
+      collection_name: "supply_chain"
+    pinecone:
+      api_key: "${PINECONE_API_KEY}"
+      environment: "${PINECONE_ENVIRONMENT}"
+      index_name: "supply-chain-index"
+      dimension: 1536
+  
+  knowledge_base:
+    provider: "chromadb"  # chromadb, local
+    chromadb:
+      path: "./data/knowledge_base"
+      collection_name: "supply_chain_kb"
+    local:
+      path: "./data/knowledge_base"
+      index_type: "faiss"  # faiss, simple
+  
+  cache:
+    provider: "redis"  # redis, memory, file
+    redis:
+      ttl: 3600  # 1小时
+      prefix: "agent_cache:"
+    memory:
+      max_size: 1000
+      ttl: 3600  # 1小时
+    file:
+      path: "./data/cache"
+      ttl: 86400  # 24小时
+  
+  monitoring:
+    enabled: true
+    metrics:
+      enabled: true
+      interval: 60  # 秒
+      endpoint: "/metrics"
+    tracing:
+      enabled: false
+      jaeger:
+        endpoint: "${JAEGER_ENDPOINT:http://localhost:14268/api/traces}"
+        service_name: "supply-chain-agent"
+    logging:
+      level: "INFO"
+      format: "json"  # json, text
+  
+  security:
+    api_key:
+      enabled: false
+      header_name: "X-API-Key"
+      keys: "${API_KEYS:}"
+    rate_limiting:
+      enabled: false
+      requests_per_minute: 60
+      burst_size: 10
+    cors:
+      enabled: true
+      origins: ["*"]
+      methods: ["GET", "POST", "PUT", "DELETE"]
+      headers: ["*"]
+  
+  output:
+    format: "normal"  # normal, markdown, json
+    options:
+      include_metadata: false
+      pretty_print: true
+      indent: 2
+    custom_templates:
+      normal: "{response}"
+      markdown: "# 响应\n\n{response}"
+      json: |
+        {
+          "response": "{response}",
+          "timestamp": "{timestamp}",
+          "agent": "{agent_name}"
+        }
+  
+  tools:
+    search:
+      provider: "serpapi"  # duckduckgo, serpapi
+      max_results: 5
+      serper:
+        api_key: "${SERPER_API_KEY:}"
+        base_url: "https://google.serper.dev/search"
+      serpapi:
+        api_key: "${SERPAPI_API_KEY:a76b1602c67dc603e7c8115c8a12074ad998608d78ddedeecab2bb6f35e6bbe9}"
+        base_url: "https://serpapi.com/search"
+      duckduckgo:
+        max_results: 5

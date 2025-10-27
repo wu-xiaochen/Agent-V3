@@ -1,0 +1,61 @@
+version: "1.0"
+description: "智能体配置"
+
+agents:
+  supply_chain_agent:
+    enabled: true
+    model: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
+    prompts_config: "config/base/prompts.yaml"
+    system_prompt: "supply_chain_planning"
+    planning_prompt: "supply_chain_planning"
+    confirmation_prompt: "user_guidance"
+    crewai_generation_prompt: "crewai_generation"
+    guidance_prompt: "user_guidance"
+    execution_prompt: "user_guidance"
+    parameters:
+      temperature: 0.7
+      max_tokens: 2000
+      timeout: 60
+    tools:
+      - "data_analyzer"
+      - "forecasting_model"
+      - "optimization_engine"
+      - "risk_assessment"
+      - "crewai_generator"
+      - "crewai_runtime"
+    memory:
+      enabled: true
+      max_conversation_length: 20
+      summary_interval: 10
+    workflow:
+      enabled: true
+      max_steps: 50
+      planning_iterations: 3
+      reflection_enabled: true
+
+  unified_agent:
+    enabled: true
+    model: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
+    prompts_config: "config/base/prompts.yaml"
+    system_prompt: "supply_chain_planning"
+    tools_prompt: "user_guidance"
+    memory_prompt: "user_guidance"
+    parameters:
+      temperature: 0.7
+      max_tokens: 2000
+      timeout: 60
+    tools:
+      - "calculator"
+      - "search"
+      - "file_operations"
+      - "code_executor"
+      - "time"
+    memory:
+      enabled: true
+      max_conversation_length: 20
+      summary_interval: 10
+    workflow:
+      enabled: true
+      max_steps: 50
+      planning_iterations: 3
+      reflection_enabled: true

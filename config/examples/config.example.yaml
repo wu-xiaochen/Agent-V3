@@ -1,0 +1,299 @@
+# Agent-V3 示例配置文件
+
+# 复制此文件为 config.yaml 并根据您的需求修改配置
+
+# LLM配置
+llm:
+  # 默认提供商
+  default_provider: "openai"
+  
+  # OpenAI配置
+  openai:
+    api_key: "your-openai-api-key-here"
+    base_url: "https://api.openai.com/v1"  # 可修改为OpenAI兼容的API地址
+    model: "gpt-4"
+    temperature: 0.7
+    max_tokens: 2000
+    timeout: 60
+  
+  # Anthropic Claude配置
+  anthropic:
+    api_key: "your-anthropic-api-key-here"
+    model: "claude-3-sonnet-20240229"
+    temperature: 0.7
+    max_tokens: 2000
+    timeout: 60
+  
+  # Hugging Face配置
+  huggingface:
+    api_key: "your-huggingface-api-key-here"
+    model: "microsoft/DialoGPT-medium"
+    temperature: 0.7
+    max_tokens: 2000
+    timeout: 60
+  
+  # 硅基流动配置
+  siliconflow:
+    api_key: "your-siliconflow-api-key-here"
+    base_url: "https://api.siliconflow.cn/v1"
+    model: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
+    temperature: 0.7
+    max_tokens: 2000
+    timeout: 60
+
+# 智能体配置
+agents:
+  # 统一智能体配置
+  unified_agent:
+    enabled: true
+    model: "gpt-4"
+    prompts_file: "src/prompts/prompts.py"
+    system_prompt_key: "UNIFIED_AGENT_SYSTEM_PROMPT"
+    tools_prompt_key: "UNIFIED_AGENT_TOOLS_PROMPT"
+    memory_prompt_key: "UNIFIED_AGENT_MEMORY_PROMPT"
+    parameters:
+      temperature: 0.7
+      max_tokens: 2000
+      timeout: 60
+    tools:
+      - "calculator"
+      - "search"
+      - "file_operations"
+      - "code_executor"
+    memory:
+      enabled: true
+      max_conversation_length: 20
+      summary_interval: 10
+    workflow:
+      enabled: true
+      max_steps: 50
+      planning_iterations: 3
+      reflection_enabled: true
+  
+  # 供应链智能体配置
+  supply_chain_agent:
+    enabled: true
+    model: "gpt-4"
+    prompts_file: "src/prompts/prompts.py"
+    system_prompt_key: "SUPPLY_CHAIN_SYSTEM_PROMPT"
+    planning_prompt_key: "SUPPLY_CHAIN_PLANNING_PROMPT"
+    confirmation_prompt_key: "SUPPLY_CHAIN_CONFIRMATION_PROMPT"
+    crewai_generation_prompt_key: "SUPPLY_CHAIN_CREWAI_GENERATION_PROMPT"
+    guidance_prompt_key: "SUPPLY_CHAIN_GUIDANCE_PROMPT"
+    execution_prompt_key: "SUPPLY_CHAIN_EXECUTION_PROMPT"
+    parameters:
+      temperature: 0.7
+      max_tokens: 2000
+      timeout: 60
+    tools:
+      - "data_analyzer"
+      - "forecasting_model"
+      - "optimization_engine"
+      - "risk_assessment"
+    memory:
+      enabled: true
+      max_conversation_length: 20
+      summary_interval: 10
+    workflow:
+      enabled: true
+      max_steps: 50
+      planning_iterations: 3
+      reflection_enabled: true
+
+# 工具配置
+tools:
+  # 搜索工具
+  search:
+    enabled: true
+    provider: "duckduckgo"
+    max_results: 10
+  
+  # 计算器工具
+  calculator:
+    enabled: true
+    precision: 6
+  
+  # 文件操作工具
+  file_operations:
+    enabled: true
+    allowed_paths:
+      - "./data"
+      - "./temp"
+    max_file_size: "10MB"
+  
+  # 代码执行工具
+  code_executor:
+    enabled: true
+    timeout: 30
+    allowed_languages:
+      - "python"
+      - "javascript"
+    sandbox: true
+  
+  # 数据分析工具
+  data_analyzer:
+    enabled: true
+    libraries:
+      - "pandas"
+      - "numpy"
+      - "matplotlib"
+  
+  # 预测模型工具
+  forecasting_model:
+    enabled: true
+    models:
+      - "arima"
+      - "lstm"
+      - "prophet"
+  
+  # 优化引擎工具
+  optimization_engine:
+    enabled: true
+    algorithms:
+      - "linear_programming"
+      - "genetic_algorithm"
+      - "simulated_annealing"
+  
+  # 风险评估工具
+  risk_assessment:
+    enabled: true
+    methods:
+      - "monte_carlo"
+      - "value_at_risk"
+      - "stress_testing"
+
+# 数据库配置
+database:
+  # PostgreSQL配置
+  postgresql:
+    host: "localhost"
+    port: 5432
+    database: "agent_v3"
+    username: "postgres"
+    password: "your-db-password"
+    pool_size: 10
+    max_overflow: 20
+  
+  # Redis配置
+  redis:
+    host: "localhost"
+    port: 6379
+    db: 0
+    password: "your-redis-password"
+    max_connections: 10
+  
+  # SQLite配置（用于开发）
+  sqlite:
+    path: "./data/agents.db"
+    pool_size: 5
+
+# 向量存储配置
+vector_store:
+  # ChromaDB配置
+  chromadb:
+    enabled: true
+    path: "./data/chroma"
+    collection_name: "agent_v3"
+    distance_function: "cosine"
+    n_results: 10
+  
+  # FAISS配置
+  faiss:
+    enabled: false
+    path: "./data/faiss"
+    index_type: "IndexFlatIP"
+    dimension: 1536
+    nlist: 100
+    nprobe: 10
+  
+  # Pinecone配置
+  pinecone:
+    enabled: false
+    api_key: "your-pinecone-api-key"
+    environment: "your-pinecone-environment"
+    index_name: "agent-v3-index"
+    dimension: 1536
+    metric: "cosine"
+
+# 嵌入模型配置
+embedding:
+  provider: "openai"
+  model: "text-embedding-ada-002"
+  api_key: "your-openai-api-key"
+  dimension: 1536
+  batch_size: 100
+
+# 缓存配置
+cache:
+  provider: "redis"  # redis, memory, file
+  redis:
+    ttl: 3600  # 1小时
+    prefix: "agent_cache:"
+  memory:
+    max_size: 1000
+    ttl: 3600  # 1小时
+  file:
+    path: "./data/cache"
+    ttl: 86400  # 24小时
+
+# 日志配置
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "json"  # json, text
+  file: "./logs/agent.log"
+  max_size: "10MB"
+  backup_count: 5
+
+# 监控配置
+monitoring:
+  enabled: true
+  metrics:
+    enabled: true
+    interval: 60  # 秒
+    endpoint: "/metrics"
+  tracing:
+    enabled: false
+    jaeger:
+      endpoint: "http://localhost:14268/api/traces"
+      service_name: "agent-v3"
+
+# 安全配置
+security:
+  api_key:
+    enabled: false
+    header_name: "X-API-Key"
+    keys: "your-api-keys"
+  rate_limiting:
+    enabled: false
+    requests_per_minute: 60
+    burst_size: 10
+  cors:
+    enabled: true
+    origins: ["*"]
+    methods: ["GET", "POST", "PUT", "DELETE"]
+    headers: ["*"]
+
+# CrewAI配置
+crewai:
+  enabled: true
+  default_model: "gpt-4"
+  max_agents: 10
+  max_tasks: 20
+  execution_timeout: 300
+  manager_llm: "gpt-4"
+  agent_llm: "gpt-3.5-turbo"
+  max_iter: 5
+  cache: true
+  verbose: true
+  process: "hierarchical"  # hierarchical, sequential
+  manager_agent: true
+
+# 应用配置
+app:
+  name: "Agent-V3"
+  version: "1.0.0"
+  debug: false
+  host: "0.0.0.0"
+  port: 8000
+  workers: 1
+  reload: false

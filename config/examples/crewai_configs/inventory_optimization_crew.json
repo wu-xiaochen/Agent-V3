@@ -1,0 +1,55 @@
+{
+  "business_process": "",
+  "crewai_config": {
+    "name": "库存优化团队",
+    "description": "基于业务流程 '优化库存管理流程' 生成的供应链优化团队",
+    "agents": [
+      {
+        "name": "供应链规划师_planner",
+        "role": "负责制定供应链战略和规划",
+        "goal": "根据业务需求制定最优的供应链规划和策略",
+        "backstory": "你是一位经验丰富的供应链规划专家，拥有超过10年的行业经验，擅长分析复杂供应链问题并制定创新解决方案。",
+        "tools": [],
+        "verbose": true,
+        "allow_delegation": false,
+        "max_iter": 25,
+        "max_rpm": 1000
+      },
+      {
+        "name": "供应链执行者_executor",
+        "role": "负责执行供应链计划和任务",
+        "goal": "高效执行供应链计划，确保各项任务按时完成",
+        "backstory": "你是一位经验丰富的供应链执行专家，擅长将计划转化为实际行动，能够有效应对执行过程中的各种挑战。",
+        "tools": [],
+        "verbose": true,
+        "allow_delegation": false,
+        "max_iter": 25,
+        "max_rpm": 1000
+      }
+    ],
+    "tasks": [
+      {
+        "name": "供应链规划_1",
+        "description": "根据分析结果制定供应链优化规划",
+        "agent": "供应链规划师_planner",
+        "expected_output": "全面的供应链优化规划，包括目标、策略和实施步骤",
+        "context": [],
+        "tools": []
+      },
+      {
+        "name": "供应链执行_2",
+        "description": "执行供应链规划，监控实施进度",
+        "agent": "供应链执行者_executor",
+        "expected_output": "供应链执行报告，包括进度、成果和问题",
+        "context": [],
+        "tools": []
+      }
+    ],
+    "process": "hierarchical",
+    "manager_role": null,
+    "verbose": true,
+    "memory": true
+  },
+  "generated_at": "2025-10-27T11:09:27.454689",
+  "version": "1.0"
+}

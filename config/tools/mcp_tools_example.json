@@ -1,0 +1,142 @@
+{
+  "version": "1.0",
+  "description": "MCP工具配置示例",
+  "tools": [
+    {
+      "name": "n8n_workflow_executor",
+      "type": "mcp",
+      "enabled": true,
+      "description": "n8n工作流执行器",
+      "config": {
+        "server_url": "http://localhost:5678",
+        "server_name": "n8n_mcp_server",
+        "tool_name": "execute_workflow",
+        "timeout": 120,
+        "auth": {
+          "type": "bearer",
+          "token": "${N8N_API_TOKEN}"
+        },
+        "parameters": {
+          "workflow_id": {
+            "type": "string",
+            "required": true,
+            "description": "工作流ID"
+          },
+          "data": {
+            "type": "object",
+            "required": false,
+            "description": "输入数据"
+          }
+        },
+        "response_mapping": {
+          "execution_id": "$.executionId",
+          "status": "$.status",
+          "result": "$.data"
+        }
+      }
+    },
+    {
+      "name": "database_query_tool",
+      "type": "mcp",
+      "enabled": true,
+      "description": "数据库查询工具",
+      "config": {
+        "server_url": "http://localhost:8080",
+        "server_name": "db_mcp_server",
+        "tool_name": "execute_query",
+        "timeout": 60,
+        "auth": {
+          "type": "basic",
+          "username": "${DB_USER}",
+          "password": "${DB_PASSWORD}"
+        },
+        "parameters": {
+          "query": {
+            "type": "string",
+            "required": true,
+            "description": "SQL查询语句"
+          },
+          "limit": {
+            "type": "integer",
+            "required": false,
+            "default": 100,
+            "description": "结果数量限制"
+          }
+        },
+        "response_mapping": {
+          "results": "$.rows",
+          "count": "$.count",
+          "execution_time": "$.execution_time_ms"
+        }
+      }
+    },
+    {
+      "name": "file_processor_tool",
+      "type": "mcp",
+      "enabled": false,
+      "description": "文件处理工具",
+      "config": {
+        "server_url": "http://localhost:9090",
+        "server_name": "file_mcp_server",
+        "tool_name": "process_file",
+        "timeout": 180,
+        "auth": {
+          "type": "api_key",
+          "key": "${FILE_PROCESSOR_API_KEY}"
+        },
+        "parameters": {
+          "file_path": {
+            "type": "string",
+            "required": true,
+            "description": "文件路径"
+          },
+          "operation": {
+            "type": "string",
+            "required": true,
+            "enum": ["extract_text", "convert_format", "compress", "analyze"],
+            "description": "文件操作类型"
+          },
+          "options": {
+            "type": "object",
+            "required": false,
+            "description": "操作选项"
+          }
+        },
+        "response_mapping": {
+          "result": "$.result",
+          "output_file": "$.output_file",
+          "metadata": "$.metadata"
+        }
+      }
+    }
+  ],
+  "tool_groups": [
+    {
+      "name": "mcp_workflow_tools",
+      "description": "MCP工作流工具集",
+      "tools": ["n8n_workflow_executor"]
+    },
+    {
+      "name": "mcp_data_tools",
+      "description": "MCP数据处理工具集",
+      "tools": ["database_query_tool"]
+    },
+    {
+      "name": "mcp_file_tools",
+      "description": "MCP文件处理工具集",
+      "tools": ["file_processor_tool"]
+    },
+    {
+      "name": "all_mcp_tools",
+      "description": "所有MCP工具",
+      "tools": ["n8n_workflow_executor", "database_query_tool", "file_processor_tool"]
+    }
+  ],
+  "agent_tool_mapping": {
+    "workflow_agent": ["mcp_workflow_tools"],
+    "data_analyst_agent": ["mcp_data_tools"],
+    "document_agent": ["mcp_file_tools"],
+    "mcp_specialist_agent": ["all_mcp_tools"],
+    "default": []
+  }
+}
