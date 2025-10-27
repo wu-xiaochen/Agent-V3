@@ -35,10 +35,15 @@ def setup_logging(debug_mode=False):
     
     # 非调试模式下，过滤LangSmith警告
     if not debug_mode:
-        warnings.filterwarnings("ignore", category=UserWarning, message=".*API key must be provided when using hosted LangSmith API.*")
+        warnings.filterwarnings("ignore", category=UserWarning, message=".*API key must be provided when hosted LangSmith API.*")
     
     logging_config = config_loader.get_logging_config()
-    level = getattr(logging, logging_config.get("level", "INFO"))
+    # 在debug模式下，将日志级别设置为DEBUG
+    if debug_mode:
+        level = logging.DEBUG
+    else:
+        level = logging.INFO  # 非debug模式只显示INFO及以上级别的日志
+    
     format_str = logging_config.get("format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     log_file = logging_config.get("file", "logs/agent.log")
     

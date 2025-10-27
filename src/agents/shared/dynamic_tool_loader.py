@@ -23,8 +23,8 @@ from .tool_config_models import (
 if TYPE_CHECKING:
     from .tools import BaseTool
 else:
-    # 运行时也需要BaseTool类型引用
-    BaseTool = None
+    # 运行时也需要BaseTool类型引用，从langchain导入
+    from langchain.tools import BaseTool
 
 
 class ToolLoaderError(Exception):

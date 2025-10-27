@@ -21,6 +21,7 @@ from langchain.llms.base import BaseLLM
 
 from src.storage.redis_chat_history import RedisConversationStore
 from src.tools.crewai_generator import CrewAIGenerator
+from src.tools.crewai_runtime_tool import CrewAIRuntimeTool
 from src.config.config_loader import ConfigLoader
 from src.prompts.prompt_loader import prompt_loader
 from src.agents.shared.tools import get_tools
@@ -32,6 +33,7 @@ class ConversationState(Enum):
     PLANNING = "PLANNING"
     CONFIRMATION = "CONFIRMATION"
     CREWAI_GENERATION = "CREWAI_GENERATION"
+    CREWAI_EXECUTION = "CREWAI_EXECUTION"
     GUIDANCE = "GUIDANCE"
     COMPLETED = "COMPLETED"
 
@@ -168,6 +170,8 @@ class SupplyChainAgent:
                 "current_step": self.current_step,
                 "workflow_context": self.workflow_context,
                 "generation_history": self.generation_history,
+                "business_plan": self.business_plan,
+                "crewai_config": self.crewai_config,
                 "updated_at": datetime.now().isoformat()
             }
             
@@ -175,7 +179,9 @@ class SupplyChainAgent:
             
             if self.verbose:
                 print(f"已保存会话 {self.session_id}，状态: {self.current_state.value}")
-        # 内存存储模式下不需要保存
+        # 内存存储模式下不需要保存，但需要更新内部状态
+        elif self.verbose:
+            print(f"内存存储模式：状态更新为 {self.current_state.value}")
     
     def _transition_state(self, new_state: ConversationState) -> bool:
         """
@@ -398,19 +404,112 @@ class SupplyChainAgent:
             business_process=json.dumps(self.business_plan, ensure_ascii=False) if isinstance(self.business_plan, dict) else self.business_plan
         )
         
-        # 转换为字典格式以便JSON序列化
-        crewai_dict = self.crewai_generator.export_to_dict(crewai_config)
-        self.crewai_config = crewai_dict
+        # 保存配置
+        self.crewai_config = crewai_config
         self._save_session()
         
-        # 转换到引导状态
-        self._transition_state(ConversationState.GUIDANCE)
+        # 转换到执行状态
+        self._transition_state(ConversationState.CREWAI_EXECUTION)
+        
+        # 尝试将crewai_config转换为可序列化的格式
+        try:
+            # 如果crewai_config有to_dict方法，使用它
+            if hasattr(crewai_config, 'to_dict'):
+                config_dict = crewai_config.to_dict()
+            # 如果crewai_config是字典，直接使用
+            elif isinstance(crewai_config, dict):
+                config_dict = crewai_config
+            # 否则尝试转换为字符串
+            else:
+                config_dict = {"config": str(crewai_config)}
+            
+            config_str = json.dumps(config_dict, ensure_ascii=False, indent=2)
+        except Exception as e:
+            # 如果序列化失败，使用字符串表示
+            config_str = str(crewai_config)
         
         return {
-            "response": f"我已为您生成了CrewAI团队配置:\n\n{json.dumps(crewai_dict, indent=2, ensure_ascii=False)}\n\n接下来我可以引导您如何按照业务流程执行操作。您需要了解哪个步骤的具体操作方法？",
+            "response": f"已成功生成CrewAI团队配置。接下来将执行团队任务。\n\n配置概览:\n{config_str}",
             "state": self.current_state.value,
-            "crewai_config": self.crewai_config
+            "crewai_config": crewai_config
         }
+    
+    async def _process_crewai_execution_state(self, user_input: str) -> Dict[str, Any]:
+        """处理CrewAI执行状态"""
+        # 检查是否要跳过执行
+        if user_input.lower() in ["跳过", "skip", "跳过执行", "跳过运行"]:
+            # 转换到引导状态
+            self._transition_state(ConversationState.GUIDANCE)
+            
+            return {
+                "response": "已跳过CrewAI团队执行。接下来我可以引导您如何按照业务流程执行操作。您需要了解哪个步骤的具体操作方法？",
+                "state": self.current_state.value,
+                "crewai_config": self.crewai_config
+            }
+        
+        # 查找CrewAIRuntimeTool
+        crewai_runtime_tool = None
+        for tool in self.tools:
+            if isinstance(tool, CrewAIRuntimeTool):
+                crewai_runtime_tool = tool
+                break
+        
+        if not crewai_runtime_tool:
+            # 如果没有找到工具，转换到错误状态
+            return {
+                "response": "错误：未找到CrewAI运行时工具。请检查工具配置。",
+                "state": self.current_state.value,
+                "error": "CrewAIRuntimeTool not found"
+            }
+        
+        try:
+            # 准备执行参数
+            config = self.crewai_config
+            query = user_input if user_input else "请按照业务流程执行任务"
+            process_type = "supply_chain"
+            
+            # 将配置对象转换为JSON字符串
+            if isinstance(config, dict):
+                config_str = json.dumps(config, ensure_ascii=False)
+            else:
+                config_str = str(config)
+            
+            # 调用CrewAIRuntimeTool执行任务
+            result = await crewai_runtime_tool._arun(
+                config=config_str,
+                query=query
+            )
+            
+            # 检查执行结果
+            if result.get("success", False):
+                # 执行成功，转换到引导状态
+                self._transition_state(ConversationState.GUIDANCE)
+                
+                return {
+                    "response": f"CrewAI团队执行成功！\n\n执行结果:\n{result.get('result', '无结果返回')}\n\n接下来我可以引导您如何按照业务流程执行操作。您需要了解哪个步骤的具体操作方法？",
+                    "state": self.current_state.value,
+                    "execution_result": result.get("result"),
+                    "crewai_config": self.crewai_config
+                }
+            else:
+                # 执行失败，保持在执行状态，允许用户重试
+                error_message = result.get("error", "未知错误")
+                
+                return {
+                    "response": f"CrewAI团队执行失败：{error_message}\n\n您可以修改查询内容后重试，或者输入'跳过'进入指导阶段。",
+                    "state": self.current_state.value,
+                    "error": error_message,
+                    "crewai_config": self.crewai_config
+                }
+                
+        except Exception as e:
+            # 异常处理，保持在执行状态
+            return {
+                "response": f"执行CrewAI团队时发生异常：{str(e)}\n\n您可以修改查询内容后重试，或者输入'跳过'进入指导阶段。",
+                "state": self.current_state.value,
+                "error": str(e),
+                "crewai_config": self.crewai_config
+            }
     
     async def _process_guidance_state(self, user_input: str) -> Dict[str, Any]:
         """处理引导状态"""
@@ -530,6 +629,9 @@ class SupplyChainAgent:
         
         elif self.current_state == ConversationState.CREWAI_GENERATION:
             result = await self._process_crewai_generation_state(user_input)
+        
+        elif self.current_state == ConversationState.CREWAI_EXECUTION:
+            result = await self._process_crewai_execution_state(user_input)
         
         elif self.current_state == ConversationState.GUIDANCE:
             result = await self._process_guidance_state(user_input)

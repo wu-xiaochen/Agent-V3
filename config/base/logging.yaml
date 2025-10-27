@@ -7,6 +7,7 @@ debug:
   show_system_logs: true  # 是否显示系统日志（如langsmith等）
   show_agent_logs: true  # 是否显示智能体内部日志
   show_tool_logs: true  # 是否显示工具调用日志
+  show_crewai_execution: true  # 新增：显示CrewAI执行过程
 
 logging:
   version: 1

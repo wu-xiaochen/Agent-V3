@@ -10,7 +10,7 @@ import aiohttp
 import requests
 from requests.auth import HTTPBasicAuth
 
-from .tools import BaseTool
+from langchain.tools import BaseTool
 from .tool_config_models import MCPToolConfig, AuthType
 
 

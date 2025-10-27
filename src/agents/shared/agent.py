@@ -11,7 +11,7 @@ from langchain_core.messages import BaseMessage
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from src.infrastructure.llm.llm_factory import LLMFactory
-from src.agents.shared.tools import get_tools
+from src.agents.shared.tools import get_tools, get_tools_for_agent
 from src.config.config_loader import config_loader
 
 

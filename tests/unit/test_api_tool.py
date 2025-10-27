@@ -22,9 +22,8 @@ class TestAPITool:
         self.config = APIToolConfig(
             name="test_api",
             description="测试API工具",
-            url="https://api.example.com/test",
+            endpoint="https://api.example.com/test",
             method="GET",
-            auth_type=AuthType.NONE,
             headers={"Content-Type": "application/json"},
             response_mapping={"result": "$.data"}
         )
@@ -32,36 +31,33 @@ class TestAPITool:
         self.auth_config = APIToolConfig(
             name="auth_api",
             description="认证API工具",
-            url="https://api.example.com/auth",
+            endpoint="https://api.example.com/auth",
             method="POST",
-            auth_type=AuthType.BEARER,
-            auth_config={"token": "test_token"},
+            auth={"type": AuthType.BEARER, "token": "test_token"},
             headers={"Content-Type": "application/json"}
         )
         
         self.basic_auth_config = APIToolConfig(
             name="basic_auth_api",
             description="基本认证API工具",
-            url="https://api.example.com/basic_auth",
+            endpoint="https://api.example.com/basic_auth",
             method="GET",
-            auth_type=AuthType.BASIC,
-            auth_config={"username": "test_user", "password": "test_pass"}
+            auth={"type": AuthType.BASIC, "username": "test_user", "password": "test_pass"}
         )
         
         self.api_key_config = APIToolConfig(
             name="api_key_auth",
             description="API密钥认证工具",
-            url="https://api.example.com/api_key",
+            endpoint="https://api.example.com/api_key",
             method="GET",
-            auth_type=AuthType.API_KEY,
-            auth_config={"key": "test_api_key", "header": "X-API-Key"}
+            auth={"type": AuthType.API_KEY, "key": "test_api_key", "additional_headers": {"api_key_header": "X-API-Key"}}
         )
     
     def test_from_config(self):
         """测试从配置创建API工具"""
         tool = APITool.from_config(self.config)
         assert tool.name == "test_api"
-        assert tool.url == "https://api.example.com/test"
+        assert tool.endpoint == "https://api.example.com/test"
         assert tool.method == "GET"
         assert tool.auth_type == AuthType.NONE
         assert tool.headers["Content-Type"] == "application/json"
@@ -85,7 +81,7 @@ class TestAPITool:
         tool = APITool.from_config(self.api_key_config)
         assert tool.auth_type == AuthType.API_KEY
         assert tool.auth_config["key"] == "test_api_key"
-        assert tool.auth_config["header"] == "X-API-Key"
+        assert tool.auth_config["additional_headers"]["api_key_header"] == "X-API-Key"
     
     @patch('requests.request')
     def test_sync_request_no_auth(self, mock_request):

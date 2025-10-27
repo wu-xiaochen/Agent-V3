@@ -9,6 +9,7 @@ import os
 import json
 import yaml
 import argparse
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -35,6 +36,7 @@ class CrewAIRuntime:
         self.crew = None
         self.agents = []
         self.tasks = []
+        self.logger = logging.getLogger(__name__)
         
         if config_path:
             self.load_config(config_path)
@@ -111,7 +113,7 @@ class CrewAIRuntime:
             return False
             
         if "crewai_config" not in config_data:
-            print("错误: 配置文件中缺少 'crewai_config' 部分")
+            logging.error("配置文件中缺少 'crewai_config' 部分")
             return False
             
         crew_config = config_data["crewai_config"]
@@ -120,19 +122,20 @@ class CrewAIRuntime:
         required_fields = ["name", "description", "agents", "tasks"]
         for field in required_fields:
             if field not in crew_config:
-                print(f"错误: crewai_config 中缺少必需字段: {field}")
+                logging.error(f"crewai_config 中缺少必需字段: {field}")
                 return False
                 
         # 检查agents和tasks是否为列表
         if not isinstance(crew_config["agents"], list) or not isinstance(crew_config["tasks"], list):
-            print("错误: agents 和 tasks 必须是列表")
+            logging.error("agents 和 tasks 必须是列表")
             return False
             
         # 检查agents和tasks是否为空
         if not crew_config["agents"] or not crew_config["tasks"]:
-            print("错误: agents 和 tasks 不能为空")
+            logging.error("agents 和 tasks 不能为空")
             return False
             
+        logging.info("CrewAI配置验证通过")
         return True
     
     def load_crew_from_config(self, config_data):
@@ -150,19 +153,19 @@ class CrewAIRuntime:
             
             # 验证配置格式
             if not self._validate_config():
-                print("错误: 配置数据格式不正确")
+                logging.error("错误: 配置数据格式不正确")
                 return False
                 
             # 创建团队
             if not self.create_crew():
-                print("错误: 创建团队失败")
+                logging.error("错误: 创建团队失败")
                 return False
                 
-            print("成功从配置数据加载并创建团队")
+            logging.info("成功从配置数据加载并创建团队")
             return True
             
         except Exception as e:
-            print(f"从配置数据加载团队失败: {str(e)}")
+            logging.error(f"从配置数据加载团队失败: {str(e)}")
             return False
     
     def create_crew(self):
@@ -178,23 +181,23 @@ class CrewAIRuntime:
             try:
                 # 获取硅基流动LLM配置
                 services_config = config_loader.get_services_config()
-                print(f"完整services配置: {services_config}")
+                self.logger.debug(f"完整services配置: {services_config}")
                 
                 # services_config包含整个services.yaml文件，需要从中获取services配置
                 services = services_config.get("services", {})
-                print(f"services键下的配置: {services}")
+                self.logger.debug(f"services键下的配置: {services}")
                 
                 # 获取LLM基础配置
                 llm_config = services.get('llm', {})
-                print(f"LLM基础配置: {llm_config}")
+                self.logger.debug(f"LLM基础配置: {llm_config}")
                 
                 # 获取CrewAI特定配置
                 crewai_config = services.get('crewai', {})
-                print(f"CrewAI配置: {crewai_config}")
+                self.logger.debug(f"CrewAI配置: {crewai_config}")
                 
                 # 检查配置是否为空
                 if not llm_config:
-                    print("错误: 未找到LLM配置，请检查config/base/services.yaml文件中的services.llm配置")
+                    self.logger.error("未找到LLM配置，请检查config/base/services.yaml文件中的services.llm配置")
                     return False
                 
                 # 获取配置参数，优先使用CrewAI特定配置
@@ -206,11 +209,11 @@ class CrewAIRuntime:
                 max_tokens = 1000  # 默认最大令牌数
                 
                 if not api_key:
-                    print("错误: 未找到硅基流动API密钥，请设置环境变量SILICONFLOW_API_KEY或在配置文件中指定")
+                    self.logger.error("未找到硅基流动API密钥，请设置环境变量SILICONFLOW_API_KEY或在配置文件中指定")
                     return False
                     
             except Exception as e:
-                print(f"错误: 读取LLM配置失败: {str(e)}")
+                self.logger.error(f"读取LLM配置失败: {str(e)}")
                 return False
             
             # 使用CrewAI原生LLM创建方式
@@ -234,11 +237,11 @@ class CrewAIRuntime:
             llm.__dict__['provider'] = "siliconflow"  # 标记提供商
             
             # 打印配置信息
-            print(f"LLM提供商: 硅基流动 (SiliconFlow) - CrewAI原生LLM")
-            print(f"API端点: {base_url}")
-            print(f"使用模型: {model_with_provider}")
-            print(f"温度参数: {temperature}")
-            print(f"最大令牌数: {max_tokens}")
+            self.logger.info(f"LLM提供商: 硅基流动 (SiliconFlow) - CrewAI原生LLM")
+            self.logger.info(f"API端点: {base_url}")
+            self.logger.info(f"使用模型: {model_with_provider}")
+            self.logger.info(f"温度参数: {temperature}")
+            self.logger.info(f"最大令牌数: {max_tokens}")
             
             # 创建智能体
             self.agents = []
@@ -254,7 +257,7 @@ class CrewAIRuntime:
                     llm=llm  # 使用硅基流动LLM
                 )
                 self.agents.append(agent)
-                print(f"已创建智能体: {agent_config.get('name', agent_config['role'])} - {agent_config['role']}")
+                self.logger.info(f"已创建智能体: {agent_config.get('name', agent_config['role'])} - {agent_config['role']}")
             
             # 创建任务
             self.tasks = []
@@ -274,7 +277,7 @@ class CrewAIRuntime:
                 # 如果找不到匹配的智能体，使用第一个智能体
                 if agent is None:
                     agent = self.agents[0]
-                    print(f"警告: 未找到匹配的智能体 '{agent_identifier}'，使用默认智能体")
+                    self.logger.warning(f"未找到匹配的智能体 '{agent_identifier}'，使用默认智能体")
                 
                 task = Task(
                     description=task_config["description"],
@@ -282,7 +285,7 @@ class CrewAIRuntime:
                     expected_output=task_config["expected_output"]
                 )
                 self.tasks.append(task)
-                print(f"已创建任务: {task_config.get('name', '未命名任务')} - {task_config['description'][:50]}...")
+                self.logger.info(f"已创建任务: {task_config.get('name', '未命名任务')} - {task_config['description'][:50]}...")
             
             # 确定流程类型
             process_type = Process.sequential
@@ -299,18 +302,18 @@ class CrewAIRuntime:
                 manager_llm=llm  # 使用硅基流动LLM作为管理器
             )
             
-            print(f"\n团队 '{crew_config['name']}' 创建成功!")
-            print(f"团队描述: {crew_config['description']}")
-            print(f"智能体数量: {len(self.agents)}")
-            print(f"任务数量: {len(self.tasks)}")
-            print(f"流程类型: {process_type}")
-            print(f"LLM提供商: 硅基流动 (SiliconFlow)")
-            print(f"使用模型: {model_with_provider}")
+            self.logger.info(f"团队 '{crew_config['name']}' 创建成功!")
+            self.logger.info(f"团队描述: {crew_config['description']}")
+            self.logger.info(f"智能体数量: {len(self.agents)}")
+            self.logger.info(f"任务数量: {len(self.tasks)}")
+            self.logger.info(f"流程类型: {process_type}")
+            self.logger.info(f"LLM提供商: 硅基流动 (SiliconFlow)")
+            self.logger.info(f"使用模型: {model_with_provider}")
                 
             return True
             
         except Exception as e:
-            print(f"创建团队失败: {str(e)}")
+            self.logger.error(f"创建团队失败: {str(e)}")
             return False
     
     def run_crew(self, query, save_result=True):
@@ -325,19 +328,17 @@ class CrewAIRuntime:
             str: 团队执行结果，如果失败则返回None
         """
         if not self.crew:
-            print("错误: 尚未创建团队，请先调用 create_crew()")
+            self.logger.error("尚未创建团队，请先调用 create_crew()")
             return None
             
-        print(f"\n=== 运行CrewAI团队 ===")
-        print(f"查询: {query}")
-        print("=" * 50)
+        self.logger.info(f"运行CrewAI团队，查询: {query}")
         
         try:
             # 运行团队 - CrewAI现在期望字典格式的输入
             inputs = {"query": query}
             result = self.crew.kickoff(inputs=inputs)
-            print("\n团队执行结果:")
-            print(result)
+            self.logger.info("团队执行结果:")
+            self.logger.info(result)
             
             if save_result:
                 self._save_result(query, result)
@@ -345,7 +346,7 @@ class CrewAIRuntime:
             return result
             
         except Exception as e:
-            print(f"\n错误: 团队执行失败: {str(e)}")
+            self.logger.error(f"团队执行失败: {str(e)}")
             return None
     
     def _save_result(self, query, result):
@@ -368,10 +369,10 @@ class CrewAIRuntime:
                 f.write(f"查询: {query}\n\n")
                 f.write(f"结果:\n{result}")
                 
-            print(f"\n结果已保存到文件: {result_file}")
+            self.logger.info(f"结果已保存到文件: {result_file}")
             
         except Exception as e:
-            print(f"保存结果失败: {str(e)}")
+            self.logger.error(f"保存结果失败: {str(e)}")
 
 
 def main():
