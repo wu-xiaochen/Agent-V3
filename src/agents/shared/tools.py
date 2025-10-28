@@ -420,18 +420,24 @@ def get_tools(tool_names: Optional[List[str]] = None, config_path: Optional[str]
                     tools_config = json.load(f)
                     for tool_config in tools_config.get("tools", []):
                         if tool_config.get("name") == "n8n_mcp_generator":
-                            env = tool_config.get("env", {})
-                            api_url = env.get("N8N_API_URL", "http://localhost:5678")
-                            # 替换 host.docker.internal 为 localhost
-                            api_url = api_url.replace("host.docker.internal", "localhost")
-                            api_key = env.get("N8N_API_KEY", "")
-                            n8n_tools = create_n8n_api_tools(api_url=api_url, api_key=api_key)
+                            # 🆕 使用 EnvManager 获取配置
+                            from src.config.env_manager import EnvManager
+                            n8n_config = EnvManager.get_n8n_config()
+                            n8n_tools = create_n8n_api_tools(
+                                api_url=n8n_config["api_url"],
+                                api_key=n8n_config["api_key"]
+                            )
                             tools.extend(n8n_tools)
                             break
             except Exception as e:
                 print(f"加载n8n API工具失败: {e}")
-                # 使用默认配置
-                tools.extend(create_n8n_api_tools())
+                # 🆕 使用 EnvManager 的默认配置
+                from src.config.env_manager import EnvManager
+                n8n_config = EnvManager.get_n8n_config()
+                tools.extend(create_n8n_api_tools(
+                    api_url=n8n_config["api_url"],
+                    api_key=n8n_config["api_key"]
+                ))
     
     return tools
 
