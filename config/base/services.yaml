@@ -61,8 +61,8 @@ services:
       agent_llm: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
       coder_model: "zai-org/GLM-4.6"  # 专门用于代码生成的模型
       temperature: 0.7
-      max_tokens: 1000
-      timeout: 30
+      max_tokens: 8000  # 增加到 8000 以支持更长的输出和上下文
+      timeout: 60  # 增加超时时间以适应更长的生成
       retry_count: 3
       # 不同角色的LLM配置
       role_models:

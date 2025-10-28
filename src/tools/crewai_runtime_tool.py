@@ -38,8 +38,27 @@ class CrewAIRuntimeToolInput(BaseModel):
 
 class CrewAIRuntimeTool(BaseTool):
     """CrewAI运行时工具"""
-    name: str = "CrewAI运行时工具"
-    description: str = "使用CrewAI创建和管理智能体团队，支持从配置文件或JSON字符串创建团队并执行任务"
+    name: str = "crewai_runtime"
+    description: str = """【CrewAI团队运行工具】
+
+⚡ 何时使用此工具:
+- 用户说"运行它"、"执行它"、"启动团队"、"开始执行"
+- 刚刚生成了 CrewAI 配置，需要执行
+- 需要运行一个多智能体协作任务
+- 用户提到"刚才的配置"、"上一步的团队"
+
+❌ 何时不使用:
+- 用户要求生成配置（使用 crewai_generator）
+- 用户要求创建 n8n 工作流（使用 n8n 工具）
+
+📋 输入要求:
+- config: CrewAI 团队配置（JSON 字符串、文件路径或配置字典）
+- query: 要执行的具体任务描述
+
+💡 示例:
+用户: "运行刚才生成的团队"
+调用: crewai_runtime(config="上一步的配置", query="执行分析任务")
+"""
     args_schema: type[BaseModel] = CrewAIRuntimeToolInput
     runtime: CrewAIRuntime = Field(default=None, init=False)
     

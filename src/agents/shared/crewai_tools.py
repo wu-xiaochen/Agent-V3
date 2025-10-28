@@ -4,12 +4,17 @@ CrewAI兼容的工具包
 """
 
 import logging
-from typing import Optional
+from typing import Optional, Type
 from datetime import datetime
 from crewai.tools import BaseTool
-from pydantic import Field
+from pydantic import BaseModel, Field
 import requests
 from bs4 import BeautifulSoup
+
+
+class CalculatorToolSchema(BaseModel):
+    """计算器工具参数 Schema"""
+    expression: str = Field(..., description="数学表达式，例如：'10 + 20 * 3'")
 
 
 class CrewAICalculatorTool(BaseTool):
@@ -17,6 +22,7 @@ class CrewAICalculatorTool(BaseTool):
     
     name: str = "calculator"
     description: str = "执行数学计算。输入数学表达式，返回计算结果。例如：'10 + 20 * 3'"
+    args_schema: Type[BaseModel] = CalculatorToolSchema
     
     def _run(self, expression: str) -> str:
         """执行计算"""
@@ -36,16 +42,27 @@ class CrewAICalculatorTool(BaseTool):
             return f"计算错误: {str(e)}"
 
 
+class TimeToolSchema(BaseModel):
+    """时间工具参数 Schema（空参数）"""
+    pass
+
+
 class CrewAITimeTool(BaseTool):
     """CrewAI时间工具"""
     
     name: str = "time"
-    description: str = "获取当前日期和时间。无需输入参数。"
+    description: str = "获取当前日期和时间。此工具不需要任何输入参数。"
+    args_schema: Type[BaseModel] = TimeToolSchema
     
-    def _run(self, query: str = "") -> str:
+    def _run(self) -> str:
         """获取当前时间"""
         now = datetime.now()
         return f"当前时间: {now.strftime('%Y-%m-%d %H:%M:%S')}"
+
+
+class SearchToolSchema(BaseModel):
+    """搜索工具参数 Schema"""
+    query: str = Field(..., description="搜索查询词")
 
 
 class CrewAISearchTool(BaseTool):
@@ -53,6 +70,7 @@ class CrewAISearchTool(BaseTool):
     
     name: str = "search"
     description: str = "搜索互联网信息。输入搜索查询，返回相关结果。"
+    args_schema: Type[BaseModel] = SearchToolSchema
     
     def _run(self, query: str) -> str:
         """执行搜索"""
@@ -101,6 +119,11 @@ class CrewAISearchTool(BaseTool):
             return f"搜索失败: {str(e)}"
 
 
+class N8NGeneratorToolSchema(BaseModel):
+    """N8N工作流生成工具参数 Schema"""
+    workflow_description: str = Field(..., description="工作流描述（中文或英文）")
+
+
 class CrewAIN8NGeneratorTool(BaseTool):
     """CrewAI N8N工作流生成工具"""
     
@@ -113,6 +136,7 @@ class CrewAIN8NGeneratorTool(BaseTool):
     - "创建一个定时任务，每小时发送邮件"
     - "创建一个HTTP请求到Slack通知的工作流"
     """
+    args_schema: Type[BaseModel] = N8NGeneratorToolSchema
     
     def _run(self, workflow_description: str) -> str:
         """生成工作流"""

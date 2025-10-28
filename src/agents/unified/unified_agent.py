@@ -5,6 +5,7 @@
 
 import warnings
 from typing import Dict, Any, List, Optional
+from enum import Enum  # 🆕 导入枚举
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import BaseMessage
@@ -17,6 +18,17 @@ from src.agents.shared.streaming_handler import StreamingDisplayHandler, SimpleS
 from src.config.config_loader import config_loader
 from src.prompts.prompt_loader import prompt_loader
 from src.core.services.context_manager import ConversationBufferWithSummary, ContextManager
+from src.core.services.context_tracker import ContextTracker  # 🆕 导入上下文追踪器
+
+
+# 🆕 智能体停止原因枚举
+class AgentStopReason(Enum):
+    """智能体停止原因"""
+    COMPLETED = "completed"  # 任务完成
+    ITERATION_LIMIT = "iteration_limit"  # 达到迭代限制
+    TIME_LIMIT = "time_limit"  # 达到时间限制
+    ERROR = "error"  # 发生错误
+    USER_INTERRUPT = "user_interrupt"  # 用户中断
 
 
 class UnifiedAgent:
@@ -69,6 +81,9 @@ class UnifiedAgent:
                     redis_url = f"redis://{host}:{port}/{db}"
         
         self.memory = self._create_memory(memory, redis_url, session_id)
+        
+        # 🆕 初始化上下文追踪器
+        self.context_tracker = ContextTracker(max_history=10)
         
         # 使用新的动态工具加载器
         try:
@@ -178,13 +193,44 @@ class UnifiedAgent:
             current_date = datetime.now().strftime("%Y年%m月%d日")
             current_year = datetime.now().year
             
-            # 构建完整的React提示词模板 - 使用标准英文格式避免解析问题，包含对话历史
+            # 构建完整的React提示词模板 - 使用标准英文格式避免解析问题，包含对话历史和上下文感知
             template = f"""Current Date and Time: {current_datetime} (Beijing Time, UTC+8)
 Current Year: {current_year}
 Today is: {current_date}
 
 IMPORTANT: When analyzing trends, news, market conditions, or any time-sensitive information, 
 always consider the current date above. Use the 'time' tool if you need to verify the current time.
+
+╔════════════════════════════════════════════════════════════════════╗
+║                    🧠 CONTEXT-AWARE RULES                         ║
+╚════════════════════════════════════════════════════════════════════╝
+
+⚠️ CRITICAL: Always check conversation history and understand context before selecting tools!
+
+📌 Tool Selection Guidelines:
+
+1. **When user says "运行它"/"执行它"/"启动它"/"run it":**
+   - CHECK the previous action first!
+   - If previous action was "crewai_generator" → Use "crewai_runtime"
+   - If previous action was "n8n_generate_and_create_workflow" → Explain workflow was created
+   - NEVER randomly choose a tool when context exists
+
+2. **For CrewAI-related tasks:**
+   - User wants to CREATE/DESIGN team config → Use "crewai_generator"
+   - User wants to RUN/EXECUTE team → Use "crewai_runtime"
+   - Keywords: "团队", "agent team", "crew", "协作"
+
+3. **For n8n workflow tasks:**
+   - ONLY use "n8n_generate_and_create_workflow" when explicitly asked for workflows
+   - Keywords: "工作流", "workflow", "n8n", "自动化", "automation"
+   - NOT for data analysis or research tasks
+
+4. **Context dependency indicators:**
+   - Pronouns: "它", "这个", "那个", "他", "她"
+   - Time references: "刚才", "上一步", "之前", "刚刚"
+   - Action verbs: "运行", "执行", "启动", "继续"
+   
+   → When these appear, ALWAYS review conversation history!
 
 Answer the following questions as best you can. You have access to the following tools:
 
@@ -314,27 +360,49 @@ Thought:{agent_scratchpad}"""
             包含响应和元数据的字典
         """
         try:
+            # 🆕 1. 记录查询到上下文追踪器
+            self.context_tracker.add_query(query)
+            
+            # 🆕 2. 检查是否依赖上下文，生成增强提示
+            enhanced_query = query
+            if self.context_tracker.is_context_dependent(query):
+                enhanced_query = self.context_tracker.generate_context_hint(query)
+                if self.streaming_style != "none":
+                    print(f"🔍 检测到上下文依赖查询，增强提示已生成")
+            
+            # 执行智能体
             if self.memory:
                 # 使用RunnableWithMessageHistory的invoke方法
                 # 不需要在这里添加intermediate_steps，因为AgentExecutor会处理
                 response = self.agent_executor.invoke(
-                    {"input": query},
+                    {"input": enhanced_query},  # 🆕 使用增强后的查询
                     config={"configurable": {"session_id": session_id}}
                 )
             else:
                 # 使用AgentExecutor的invoke方法
-                response = self.agent_executor.invoke({"input": query})
+                response = self.agent_executor.invoke({"input": enhanced_query})  # 🆕 使用增强后的查询
             
             # 处理不同类型的响应
             if hasattr(response, 'get'):
                 # 字典类型响应
                 raw_output = response.get("output", "未收到有效响应")
+                # 🆕 提取中间步骤（工具调用）
+                intermediate_steps = response.get("intermediate_steps", [])
             elif hasattr(response, 'return_values'):
                 # AgentFinish对象类型响应
                 raw_output = response.return_values.get("output", "未收到有效响应")
+                intermediate_steps = []
             else:
                 # 其他类型，尝试直接转换为字符串
                 raw_output = str(response)
+                intermediate_steps = []
+            
+            # 🆕 3. 记录工具调用到上下文追踪器
+            for step in intermediate_steps:
+                if len(step) >= 2:
+                    action, observation = step[0], step[1]
+                    if hasattr(action, 'tool'):
+                        self.context_tracker.add_tool_call(action.tool, observation)
             
             # 构建元数据
             metadata = {
@@ -344,7 +412,9 @@ Thought:{agent_scratchpad}"""
                 "output_format": self.output_formatter.get_format(),
                 "session_id": session_id,
                 "has_memory": self.memory is not None,
-                "memory_type": "redis" if self.redis_url else "in_memory"
+                "memory_type": "redis" if self.redis_url else "in_memory",
+                # 🆕 添加上下文追踪器统计信息
+                "context_stats": self.context_tracker.get_statistics()
             }
             
             # 使用OutputFormatter格式化响应
@@ -849,3 +919,184 @@ Thought:{agent_scratchpad}"""
                 info["redis_error"] = str(e)
         
         return info
+    
+    # 🆕 自动继续执行相关方法
+    
+    def _detect_stop_reason(self, response: Dict[str, Any], error: Optional[Exception] = None) -> AgentStopReason:
+        """
+        检测智能体停止原因
+        
+        Args:
+            response: 执行响应
+            error: 异常对象（如果有）
+        
+        Returns:
+            停止原因
+        """
+        if error:
+            return AgentStopReason.ERROR
+        
+        # 检查响应中的元数据
+        if isinstance(response, dict):
+            metadata = response.get("metadata", {})
+            
+            # 检查是否达到迭代限制
+            if "iteration_limit_reached" in str(response).lower():
+                return AgentStopReason.ITERATION_LIMIT
+            
+            # 检查是否达到时间限制
+            if "time_limit" in str(response).lower() or "timeout" in str(response).lower():
+                return AgentStopReason.TIME_LIMIT
+            
+            # 检查输出是否包含完整结果
+            output = response.get("output", "")
+            if output and "Final Answer" in str(output):
+                return AgentStopReason.COMPLETED
+        
+        # 默认认为任务完成
+        return AgentStopReason.COMPLETED
+    
+    def _generate_continuation_prompt(self, original_query: str, previous_results: List[str], last_actions: List[str]) -> str:
+        """
+        生成继续执行的提示
+        
+        Args:
+            original_query: 原始查询
+            previous_results: 之前的结果列表
+            last_actions: 最后几步的动作
+        
+        Returns:
+            继续执行的提示
+        """
+        # 构建上下文摘要
+        context = f"""原始任务: {original_query}
+
+已完成的工作:
+"""
+        for i, result in enumerate(previous_results, 1):
+            result_summary = result[:200] + "..." if len(result) > 200 else result
+            context += f"{i}. {result_summary}\n"
+        
+        if last_actions:
+            context += f"\n最近的操作:\n"
+            for action in last_actions:
+                context += f"- {action}\n"
+        
+        context += f"""
+
+请继续完成任务，基于以上已完成的工作。不要重复已完成的步骤。"""
+        
+        return context
+    
+    def _extract_last_actions(self, response: Dict[str, Any], n: int = 3) -> List[str]:
+        """
+        提取最后 n 个动作
+        
+        Args:
+            response: 执行响应
+            n: 提取数量
+        
+        Returns:
+            动作列表
+        """
+        actions = []
+        if isinstance(response, dict):
+            intermediate_steps = response.get("intermediate_steps", [])
+            for step in intermediate_steps[-n:]:
+                if len(step) >= 2:
+                    action, observation = step[0], step[1]
+                    if hasattr(action, 'tool') and hasattr(action, 'tool_input'):
+                        actions.append(f"{action.tool}: {str(action.tool_input)[:100]}")
+        return actions
+    
+    def run_with_auto_continue(
+        self, 
+        query: str, 
+        session_id: str = "default",
+        max_retries: int = 3,
+        reset_iterations: bool = True
+    ) -> Dict[str, Any]:
+        """
+        运行智能体，支持自动继续执行
+        
+        Args:
+            query: 用户查询
+            session_id: 会话ID
+            max_retries: 最大重试次数
+            reset_iterations: 是否在每次重试时重置迭代计数
+        
+        Returns:
+            包含响应和元数据的字典
+        """
+        original_query = query
+        accumulated_results = []
+        total_iterations = 0
+        
+        for attempt in range(max_retries + 1):
+            try:
+                if self.streaming_style != "none" and attempt > 0:
+                    print(f"\n🔄 自动继续执行 ({attempt}/{max_retries})...")
+                
+                # 如果不是第一次尝试，生成续接提示
+                if attempt > 0:
+                    last_actions = self._extract_last_actions(result, n=3) if 'result' in locals() else []
+                    query = self._generate_continuation_prompt(
+                        original_query,
+                        accumulated_results,
+                        last_actions
+                    )
+                
+                # 执行智能体
+                result = self.run(query, session_id)
+                
+                # 检测停止原因
+                stop_reason = self._detect_stop_reason(result)
+                
+                # 累积结果
+                if result.get("response"):
+                    accumulated_results.append(result["response"])
+                
+                # 如果任务完成，返回结果
+                if stop_reason == AgentStopReason.COMPLETED:
+                    if self.streaming_style != "none" and attempt > 0:
+                        print(f"✅ 任务完成（经过 {attempt + 1} 次执行）")
+                    
+                    # 合并所有结果
+                    final_response = "\n\n".join(accumulated_results)
+                    result["response"] = final_response
+                    result["metadata"]["auto_continue_attempts"] = attempt + 1
+                    result["metadata"]["stop_reason"] = stop_reason.value
+                    return result
+                
+                # 如果是错误，不再继续
+                if stop_reason == AgentStopReason.ERROR:
+                    result["metadata"]["stop_reason"] = stop_reason.value
+                    return result
+                
+                # 如果达到重试次数，返回当前结果
+                if attempt >= max_retries:
+                    if self.streaming_style != "none":
+                        print(f"⚠️  达到最大重试次数 ({max_retries})，返回部分结果")
+                    final_response = "\n\n".join(accumulated_results)
+                    result["response"] = final_response
+                    result["metadata"]["auto_continue_attempts"] = attempt + 1
+                    result["metadata"]["stop_reason"] = stop_reason.value
+                    result["metadata"]["partial_result"] = True
+                    return result
+                
+            except Exception as e:
+                error_result = {
+                    "response": f"执行出错: {str(e)}",
+                    "metadata": {
+                        "error": str(e),
+                        "auto_continue_attempts": attempt + 1,
+                        "stop_reason": AgentStopReason.ERROR.value
+                    }
+                }
+                return error_result
+        
+        # 不应该到达这里
+        return {
+            "response": "未知错误",
+            "metadata": {"error": "未知错误"}
+        }
