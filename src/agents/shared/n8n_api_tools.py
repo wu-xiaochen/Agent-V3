@@ -234,16 +234,26 @@ class N8NGenerateAndCreateWorkflowTool(BaseTool):
     """N8N 智能生成并创建工作流工具 - AI 描述转工作流"""
     
     name: str = "n8n_generate_and_create_workflow"
-    description: str = """根据简短描述自动生成并创建 n8n 工作流。
+    description: str = """【n8n工作流生成工具】
 
-重要: 
-- 只需提供简短的工作流描述（1-2句话）
-- 不要提供 JSON 或复杂的配置
-- 工具会自动生成合适的工作流
+⚠️ 仅用于工作流自动化场景！
 
-输入格式: 简短的文本描述
+⚡ 何时使用此工具:
+- 用户明确要求创建 "n8n 工作流"、"自动化流程"
+- 需要定时任务、webhook 触发、数据处理流程
+- 关键词："n8n"、"工作流"、"自动化"、"定时"、"触发器"
 
-正确示例:
+❌ 何时不使用:
+- 用户说"运行它"（应该检查上下文，可能是 CrewAI）
+- 用户要求分析或研究（使用 CrewAI）
+- 简单的数据处理（使用其他工具）
+- 用户刚生成了 CrewAI 配置（不要用 n8n）
+
+📋 输入要求:
+- description: 简短的工作流描述（1-2句话）
+- 不要提供 JSON 或复杂配置
+
+💡 正确示例:
 - "每小时检查库存"
 - "接收订单请求"
 - "定时发送报告"
@@ -345,10 +355,65 @@ class N8NGenerateAndCreateWorkflowTool(BaseTool):
 4. 使用真实可用的 n8n 节点类型
 
 可用的节点类型：
-- 触发器: manualTrigger, webhook, scheduleTrigger
-- 数据处理: set (设置变量), if (条件判断), merge (合并数据), splitInBatches (批处理)
-- HTTP: httpRequest (API 调用)
-- 其他: code (JavaScript代码), function (函数节点)
+
+【触发器类】
+- manualTrigger: 手动触发
+- webhook: Webhook 触发器
+- scheduleTrigger: 定时触发（按时间表）
+- emailTrigger: 邮件触发
+
+【数据处理类】
+- set: 设置变量/数据
+- if: 条件判断
+- switch: 多路分支（类似 switch-case）
+- merge: 合并多个数据流
+- splitInBatches: 批量处理
+- itemLists: 数组/列表操作
+- filter: 过滤数据
+
+【AI/智能类】
+- aiAgent: AI Agent 智能体（可调用 LLM 执行复杂任务：分析、总结、决策、问答、内容生成）
+- chatOpenAI: OpenAI 聊天模型
+- chatAnthropic: Claude 聊天模型
+- embeddings: 文本向量化/嵌入
+- vectorStore: 向量数据库（存储和检索）
+- memoryManager: 对话记忆管理
+
+【HTTP/API 类】
+- httpRequest: HTTP API 调用
+- webhook: Webhook 响应
+
+【数据库类】
+- postgres: PostgreSQL 数据库
+- mysql: MySQL 数据库
+- mongodb: MongoDB 数据库
+- redis: Redis 缓存
+
+【通知类】
+- emailSend: 发送邮件
+- slack: Slack 通知
+- telegram: Telegram 消息
+- discord: Discord 消息
+
+【文件处理类】
+- readBinaryFile: 读取文件
+- writeBinaryFile: 写入文件
+- spreadsheet: 表格处理
+
+【工具类】
+- code: JavaScript 代码执行
+- executeCommand: 执行命令行
+- wait: 等待/延迟
+- noOp: 空操作（仅传递数据）
+
+⭐ 节点使用建议：
+- AI 任务（分析、生成、问答）→ aiAgent, chatOpenAI, chatAnthropic
+- 数据处理（转换、过滤）→ set, filter, code
+- 条件判断（单一条件）→ if
+- 多分支判断 → switch
+- 外部 API 调用 → httpRequest
+- 数据存储 → postgres, mongodb, redis
+- 通知提醒 → emailSend, slack, telegram
 
 请以 JSON 格式返回工作流设计，格式如下：
 {{
@@ -523,22 +588,38 @@ class N8NGenerateAndCreateWorkflowTool(BaseTool):
     
     def _get_node_parameters(self, node_type: str, node_design: Dict) -> Dict:
         """根据节点类型生成参数"""
-        if "trigger" in node_type.lower():
-            if "schedule" in node_type.lower():
-                return {
-                    "rule": {
-                        "interval": [{"field": "hours", "hoursInterval": 1}]
-                    }
-                }
-            elif "webhook" in node_type.lower():
-                return {
-                    "path": "webhook",
-                    "responseMode": "onReceived"
-                }
+        desc = node_design.get("description", "")
+        node_lower = node_type.lower()
+        
+        # 触发器类
+        if "trigger" in node_lower:
+            if "schedule" in node_lower:
+                return {"rule": {"interval": [{"field": "hours", "hoursInterval": 1}]}}
+            elif "webhook" in node_lower:
+                return {"path": "webhook", "responseMode": "onReceived"}
+            elif "email" in node_lower:
+                return {"pollTime": 60000}
             else:
                 return {}
         
-        elif "httpRequest" in node_type:
+        # AI/智能类节点
+        elif "aiagent" in node_lower or ("agent" in node_lower and "langchain" in node_type):
+            return {"text": f"={{{{ $json.input || '{desc}' }}}}", "options": {}}
+        
+        elif "chatopenai" in node_lower or "chatanthropic" in node_lower:
+            return {"messages": [{"role": "user", "content": f"={{{{ $json.input || '{desc}' }}}}"}]}
+        
+        elif "embedding" in node_lower:
+            return {"text": "={{$json.text}}"}
+        
+        elif "vectorstore" in node_lower:
+            return {"operation": "insert", "text": "={{$json.text}}"}
+        
+        elif "memory" in node_lower:
+            return {"operation": "get", "key": "conversation"}
+        
+        # HTTP/API类
+        elif "httprequest" in node_lower:
             return {
                 "method": "POST",
                 "url": "https://api.example.com/endpoint",
@@ -548,8 +629,8 @@ class N8NGenerateAndCreateWorkflowTool(BaseTool):
                 "options": {}
             }
         
-        elif node_type == "n8n-nodes-base.set":
-            desc = node_design.get("description", "")
+        # 数据处理类
+        elif node_type == "n8n-nodes-base.set" or "set" in node_lower:
             return {
                 "values": {
                     "string": [
@@ -560,7 +641,7 @@ class N8NGenerateAndCreateWorkflowTool(BaseTool):
                 "options": {}
             }
         
-        elif node_type == "n8n-nodes-base.if":
+        elif node_type == "n8n-nodes-base.if" or (node_lower == "if"):
             return {
                 "conditions": {
                     "string": [
@@ -569,20 +650,106 @@ class N8NGenerateAndCreateWorkflowTool(BaseTool):
                 }
             }
         
+        elif "switch" in node_lower:
+            return {
+                "mode": "expression",
+                "rules": {
+                    "rules": [
+                        {"value": "={{$json.value}}", "output": 0}
+                    ]
+                }
+            }
+        
+        elif "filter" in node_lower:
+            return {"conditions": {"string": [{"value1": "={{$json.field}}", "operation": "notEmpty"}]}}
+        
+        # 数据库类
+        elif "postgres" in node_lower or "mysql" in node_lower:
+            return {"operation": "select", "query": "SELECT * FROM table_name"}
+        
+        elif "mongodb" in node_lower:
+            return {"operation": "find", "collection": "collection_name"}
+        
+        elif "redis" in node_lower:
+            return {"operation": "get", "key": "key_name"}
+        
+        # 通知类
+        elif "emailsend" in node_lower or "email" in node_lower:
+            return {
+                "fromEmail": "noreply@example.com",
+                "toEmail": "={{$json.email}}",
+                "subject": desc or "通知",
+                "message": "={{$json.message}}"
+            }
+        
+        elif "slack" in node_lower:
+            return {"channelId": "", "text": "={{$json.message}}"}
+        
+        elif "telegram" in node_lower:
+            return {"chatId": "", "text": "={{$json.message}}"}
+        
+        # 工具类
+        elif "code" in node_lower:
+            return {"mode": "runOnceForAllItems", "jsCode": "// 处理数据\nreturn items;"}
+        
+        elif "wait" in node_lower:
+            return {"amount": 1, "unit": "seconds"}
+        
         else:
             return {}
     
     def _get_type_version(self, node_type: str) -> int:
         """获取节点类型版本"""
         version_map = {
-            "n8n-nodes-base.httpRequest": 4,
+            # 触发器类
+            "n8n-nodes-base.manualTrigger": 1,
+            "n8n-nodes-base.webhook": 1,
+            "n8n-nodes-base.scheduleTrigger": 1,
+            "n8n-nodes-base.emailTrigger": 1,
+            
+            # 数据处理类
             "n8n-nodes-base.set": 3,
             "n8n-nodes-base.if": 1,
+            "n8n-nodes-base.switch": 3,
             "n8n-nodes-base.merge": 2,
             "n8n-nodes-base.splitInBatches": 2,
-            "n8n-nodes-base.scheduleTrigger": 1,
-            "n8n-nodes-base.webhook": 1,
-            "n8n-nodes-base.manualTrigger": 1,
+            "n8n-nodes-base.itemLists": 2,
+            "n8n-nodes-base.filter": 1,
+            
+            # AI/智能类
+            "@n8n/n8n-nodes-langchain.agent": 1,
+            "@n8n/n8n-nodes-langchain.chatOpenAI": 1,
+            "@n8n/n8n-nodes-langchain.chatAnthropic": 1,
+            "@n8n/n8n-nodes-langchain.embeddings": 1,
+            "@n8n/n8n-nodes-langchain.vectorStore": 1,
+            "@n8n/n8n-nodes-langchain.memoryManager": 1,
+            
+            # HTTP/API类
+            "n8n-nodes-base.httpRequest": 4,
+            
+            # 数据库类
+            "n8n-nodes-base.postgres": 2,
+            "n8n-nodes-base.mysql": 2,
+            "n8n-nodes-base.mongodb": 1,
+            "n8n-nodes-base.redis": 1,
+            
+            # 通知类
+            "n8n-nodes-base.emailSend": 2,
+            "n8n-nodes-base.slack": 2,
+            "n8n-nodes-base.telegram": 1,
+            "n8n-nodes-base.discord": 1,
+            
+            # 文件处理类
+            "n8n-nodes-base.readBinaryFile": 1,
+            "n8n-nodes-base.writeBinaryFile": 1,
+            "n8n-nodes-base.spreadsheet": 2,
+            
+            # 工具类
+            "n8n-nodes-base.code": 2,
+            "n8n-nodes-base.function": 1,
+            "n8n-nodes-base.executeCommand": 1,
+            "n8n-nodes-base.wait": 1,
+            "n8n-nodes-base.noOp": 1,
         }
         return version_map.get(node_type, 1)
     

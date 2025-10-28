@@ -156,14 +156,26 @@ def interactive_mode(agent: UnifiedAgent, stream: bool = False):
             print(f"\n错误: {str(e)}")
 
 
-def single_query_mode(agent: UnifiedAgent, query: str, stream: bool = False):
+def single_query_mode(agent: UnifiedAgent, query: str, stream: bool = False, auto_continue: bool = False, max_retries: int = 3):
     """单次查询模式"""
     try:
         # 注意：streaming_style 参数已经在创建agent时设置了callbacks
         # 这些callbacks会在run()方法执行时自动触发，提供实时输出
-        response = agent.run(query)
+        
+        # 🆕 如果启用自动继续，使用 run_with_auto_continue
+        if auto_continue:
+            print(f"🔄 自动继续模式已启用（最大重试: {max_retries}）")
+            response = agent.run_with_auto_continue(query, max_retries=max_retries)
+        else:
+            response = agent.run(query)
+        
         if isinstance(response, dict) and "response" in response:
             print(f"\n{response['response']}")
+            # 🆕 显示自动继续的统计信息
+            if auto_continue and "metadata" in response:
+                attempts = response["metadata"].get("auto_continue_attempts", 1)
+                if attempts > 1:
+                    print(f"\n📊 统计: 经过 {attempts} 次执行完成任务")
         else:
             print(f"\n{response}")
     except Exception as e:
@@ -179,6 +191,8 @@ def main():
     parser.add_argument("--stream", "-s", action="store_true", help="启用流式输出")
     parser.add_argument("--streaming-style", choices=["simple", "detailed", "none"], default="simple", 
                        help="流式输出样式: simple=简洁美观, detailed=详细完整, none=只显示结果")
+    parser.add_argument("--auto-continue", action="store_true", help="🆕 启用自动继续执行（达到限制时自动续接）")
+    parser.add_argument("--max-retries", type=int, default=3, help="🆕 自动继续的最大重试次数")
     parser.add_argument("--config", type=str, help="配置文件路径")
     parser.add_argument("--debug", action="store_true", help="调试模式，显示详细日志")
     parser.add_argument("--no-debug", action="store_true", help="关闭调试模式，仅显示对话信息")
@@ -204,7 +218,8 @@ def main():
         
         if args.query:
             # 单次查询模式
-            single_query_mode(agent, args.query, args.stream)
+            # 🆕 传递auto_continue和max_retries参数
+            single_query_mode(agent, args.query, args.stream, args.auto_continue, args.max_retries)
         elif args.interactive:
             interactive_mode(agent, args.stream)
         else:
