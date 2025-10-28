@@ -43,17 +43,26 @@ services:
   
   crewai:
     enabled: true
-    default_model: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
     max_agents: 10
     max_tasks: 20
     execution_timeout: 300
-    manager_llm: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
-    agent_llm: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
     max_iter: 5
     cache: true
     verbose: true
     process: "hierarchical"  # hierarchical, sequential
     manager_agent: true
+    # CrewAI专用的LLM配置，与外层智能体分离
+    llm:
+      provider: "siliconflow"
+      api_key: "${SILICONFLOW_API_KEY}"
+      base_url: "https://api.siliconflow.cn/v1"
+      default_model: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
+      manager_llm: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
+      agent_llm: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
+      temperature: 0.7
+      max_tokens: 1000
+      timeout: 30
+      retry_count: 3
   
   embedding:
     provider: "huggingface"  # openai, azure, huggingface

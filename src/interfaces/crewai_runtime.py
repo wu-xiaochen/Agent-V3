@@ -177,9 +177,9 @@ class CrewAIRuntime:
         try:
             crew_config = self.config_data["crewai_config"]
             
-            # 从配置文件获取LLM配置
+            # 从配置文件获取CrewAI专用LLM配置
             try:
-                # 获取硅基流动LLM配置
+                # 获取服务配置
                 services_config = config_loader.get_services_config()
                 self.logger.debug(f"完整services配置: {services_config}")
                 
@@ -187,29 +187,29 @@ class CrewAIRuntime:
                 services = services_config.get("services", {})
                 self.logger.debug(f"services键下的配置: {services}")
                 
-                # 获取LLM基础配置
-                llm_config = services.get('llm', {})
-                self.logger.debug(f"LLM基础配置: {llm_config}")
-                
                 # 获取CrewAI特定配置
                 crewai_config = services.get('crewai', {})
                 self.logger.debug(f"CrewAI配置: {crewai_config}")
                 
+                # 获取CrewAI专用LLM配置
+                crewai_llm_config = crewai_config.get('llm', {})
+                self.logger.debug(f"CrewAI LLM配置: {crewai_llm_config}")
+                
                 # 检查配置是否为空
-                if not llm_config:
-                    self.logger.error("未找到LLM配置，请检查config/base/services.yaml文件中的services.llm配置")
+                if not crewai_llm_config:
+                    self.logger.error("未找到CrewAI LLM配置，请检查config/base/services.yaml文件中的services.crewai.llm配置")
                     return False
                 
-                # 获取配置参数，优先使用CrewAI特定配置
-                api_key = llm_config.get("api_key") or os.getenv("SILICONFLOW_API_KEY")
-                base_url = llm_config.get("base_url") or "https://api.siliconflow.cn/v1"
-                # 优先使用crewai配置中的模型，如果没有则使用llm配置中的默认模型
-                model_name = crewai_config.get("default_model") or llm_config.get("default_model") or "deepseek-chat"
-                temperature = 0.7  # 默认温度
-                max_tokens = 1000  # 默认最大令牌数
+                # 获取配置参数
+                provider = crewai_llm_config.get("provider", "siliconflow")
+                api_key = crewai_llm_config.get("api_key") or os.getenv("SILICONFLOW_API_KEY")
+                base_url = crewai_llm_config.get("base_url") or "https://api.siliconflow.cn/v1"
+                model_name = crewai_llm_config.get("default_model") or "deepseek-chat"
+                temperature = crewai_llm_config.get("temperature", 0.7)
+                max_tokens = crewai_llm_config.get("max_tokens", 1000)
                 
                 if not api_key:
-                    self.logger.error("未找到硅基流动API密钥，请设置环境变量SILICONFLOW_API_KEY或在配置文件中指定")
+                    self.logger.error("未找到CrewAI LLM API密钥，请设置环境变量或在配置文件中指定")
                     return False
                     
             except Exception as e:
@@ -234,10 +234,10 @@ class CrewAIRuntime:
             
             # 存储实际使用的模型信息
             llm.__dict__['actual_model'] = model_name  # 从配置读取实际模型名称
-            llm.__dict__['provider'] = "siliconflow"  # 标记提供商
+            llm.__dict__['provider'] = provider  # 标记提供商
             
             # 打印配置信息
-            self.logger.info(f"LLM提供商: 硅基流动 (SiliconFlow) - CrewAI原生LLM")
+            self.logger.info(f"LLM提供商: {provider} - CrewAI专用LLM")
             self.logger.info(f"API端点: {base_url}")
             self.logger.info(f"使用模型: {model_with_provider}")
             self.logger.info(f"温度参数: {temperature}")

@@ -1,7 +1,7 @@
 """
 CrewAI 配置生成工具
 
-这个模块提供了生成 CrewAI 团队配置的功能，根据供应链业务流程
+这个模块提供了生成 CrewAI 团队配置的功能，根据业务需求
 生成相应的智能体配置。
 """
 
@@ -35,6 +35,18 @@ class AgentRole(str, Enum):
     COORDINATOR = "coordinator"  # 协调员
     EXECUTOR = "executor"  # 执行者
     REVIEWER = "reviewer"  # 审查者
+
+
+class BusinessDomain(str, Enum):
+    """业务领域枚举"""
+    GENERAL = "general"  # 通用领域
+    SUPPLY_CHAIN = "supply_chain"  # 供应链
+    TECHNOLOGY = "technology"  # 技术
+    MARKETING = "marketing"  # 市场营销
+    FINANCE = "finance"  # 金融
+    HEALTHCARE = "healthcare"  # 医疗健康
+    EDUCATION = "education"  # 教育
+    RESEARCH = "research"  # 研究
 
 
 class CrewAgentConfig(BaseModel):
@@ -80,75 +92,279 @@ class CrewAIGenerator:
         self.agent_templates = self._load_agent_templates()
         self.task_templates = self._load_task_templates()
     
-    def _load_agent_templates(self) -> Dict[str, Dict[str, str]]:
+    def _detect_domain(self, business_process: str) -> BusinessDomain:
+        """检测业务领域"""
+        process_lower = business_process.lower()
+        
+        # 定义领域关键词
+        domain_keywords = {
+            BusinessDomain.SUPPLY_CHAIN: ["供应链", "物流", "采购", "库存", "配送", "仓储"],
+            BusinessDomain.TECHNOLOGY: ["技术", "软件", "开发", "编程", "系统", "架构", "ai", "人工智能", "机器学习"],
+            BusinessDomain.MARKETING: ["营销", "市场", "推广", "品牌", "广告", "销售", "客户"],
+            BusinessDomain.FINANCE: ["金融", "财务", "投资", "银行", "保险", "会计", "预算"],
+            BusinessDomain.HEALTHCARE: ["医疗", "健康", "医院", "药品", "治疗", "护理", "疾病"],
+            BusinessDomain.EDUCATION: ["教育", "学习", "培训", "学校", "课程", "教学", "学生"],
+            BusinessDomain.RESEARCH: ["研究", "科研", "学术", "论文", "实验", "数据", "分析", "趋势"]
+        }
+        
+        # 检测匹配的领域
+        for domain, keywords in domain_keywords.items():
+            if any(keyword in process_lower for keyword in keywords):
+                return domain
+        
+        # 默认返回通用领域
+        return BusinessDomain.GENERAL
+    
+    def _load_agent_templates(self) -> Dict[str, Dict[str, Dict[str, str]]]:
         """加载智能体模板"""
         return {
-            AgentRole.PLANNER: {
-                "name": "供应链规划师",
-                "role": "负责制定供应链战略和规划",
-                "goal": "根据业务需求制定最优的供应链规划和策略",
-                "backstory": "你是一位经验丰富的供应链规划专家，拥有超过10年的行业经验，擅长分析复杂供应链问题并制定创新解决方案。"
+            BusinessDomain.GENERAL: {
+                AgentRole.PLANNER: {
+                    "name": "规划师",
+                    "role": "负责制定战略和规划",
+                    "goal": "根据业务需求制定最优的规划和策略",
+                    "backstory": "你是一位经验丰富的规划专家，拥有超过10年的行业经验，擅长分析复杂问题并制定创新解决方案。"
+                },
+                AgentRole.ANALYST: {
+                    "name": "分析师",
+                    "role": "负责分析数据和趋势",
+                    "goal": "深入分析数据，识别问题和机会，提供数据驱动的洞察",
+                    "backstory": "你是一位专业的数据分析师，精通各种数据分析工具和方法，能够从复杂数据中提取有价值的信息。"
+                },
+                AgentRole.COORDINATOR: {
+                    "name": "协调员",
+                    "role": "负责协调各环节的运作",
+                    "goal": "确保各环节高效协同，优化整体运作效率",
+                    "backstory": "你是一位出色的协调专家，擅长跨部门沟通和资源协调，能够有效解决各种协调问题。"
+                },
+                AgentRole.EXECUTOR: {
+                    "name": "执行者",
+                    "role": "负责执行计划和任务",
+                    "goal": "高效执行计划，确保各项任务按时完成",
+                    "backstory": "你是一位经验丰富的执行专家，擅长将计划转化为实际行动，能够有效应对执行过程中的各种挑战。"
+                },
+                AgentRole.REVIEWER: {
+                    "name": "审查者",
+                    "role": "负责审查流程和结果",
+                    "goal": "全面审查流程和结果，确保质量和效率",
+                    "backstory": "你是一位严谨的审查专家，具有敏锐的洞察力，能够发现潜在问题并提出改进建议。"
+                }
             },
-            AgentRole.ANALYST: {
-                "name": "供应链分析师",
-                "role": "负责分析供应链数据和趋势",
-                "goal": "深入分析供应链数据，识别问题和机会，提供数据驱动的洞察",
-                "backstory": "你是一位专业的供应链数据分析师，精通各种数据分析工具和方法，能够从复杂数据中提取有价值的信息。"
+            BusinessDomain.SUPPLY_CHAIN: {
+                AgentRole.PLANNER: {
+                    "name": "供应链规划师",
+                    "role": "负责制定供应链战略和规划",
+                    "goal": "根据业务需求制定最优的供应链规划和策略",
+                    "backstory": "你是一位经验丰富的供应链规划专家，拥有超过10年的行业经验，擅长分析复杂供应链问题并制定创新解决方案。"
+                },
+                AgentRole.ANALYST: {
+                    "name": "供应链分析师",
+                    "role": "负责分析供应链数据和趋势",
+                    "goal": "深入分析供应链数据，识别问题和机会，提供数据驱动的洞察",
+                    "backstory": "你是一位专业的供应链数据分析师，精通各种数据分析工具和方法，能够从复杂数据中提取有价值的信息。"
+                },
+                AgentRole.COORDINATOR: {
+                    "name": "供应链协调员",
+                    "role": "负责协调供应链各环节的运作",
+                    "goal": "确保供应链各环节高效协同，优化整体运作效率",
+                    "backstory": "你是一位出色的供应链协调专家，擅长跨部门沟通和资源协调，能够有效解决供应链中的各种协调问题。"
+                },
+                AgentRole.EXECUTOR: {
+                    "name": "供应链执行者",
+                    "role": "负责执行供应链计划和任务",
+                    "goal": "高效执行供应链计划，确保各项任务按时完成",
+                    "backstory": "你是一位经验丰富的供应链执行专家，擅长将计划转化为实际行动，能够有效应对执行过程中的各种挑战。"
+                },
+                AgentRole.REVIEWER: {
+                    "name": "供应链审查者",
+                    "role": "负责审查供应链流程和结果",
+                    "goal": "全面审查供应链流程和结果，确保质量和效率",
+                    "backstory": "你是一位严谨的供应链审查专家，具有敏锐的洞察力，能够发现潜在问题并提出改进建议。"
+                }
             },
-            AgentRole.COORDINATOR: {
-                "name": "供应链协调员",
-                "role": "负责协调供应链各环节的运作",
-                "goal": "确保供应链各环节高效协同，优化整体运作效率",
-                "backstory": "你是一位出色的供应链协调专家，擅长跨部门沟通和资源协调，能够有效解决供应链中的各种协调问题。"
+            BusinessDomain.TECHNOLOGY: {
+                AgentRole.PLANNER: {
+                    "name": "技术架构师",
+                    "role": "负责设计技术架构和规划",
+                    "goal": "根据业务需求设计最优的技术架构和实施规划",
+                    "backstory": "你是一位资深的技术架构师，拥有丰富的系统设计经验，擅长创建可扩展、高性能的技术解决方案。"
+                },
+                AgentRole.ANALYST: {
+                    "name": "技术分析师",
+                    "role": "负责分析技术趋势和数据",
+                    "goal": "深入分析技术趋势和数据，识别技术机会和风险",
+                    "backstory": "你是一位专业的技术分析师，精通各种技术评估方法，能够准确评估技术的可行性和潜在价值。"
+                },
+                AgentRole.COORDINATOR: {
+                    "name": "项目经理",
+                    "role": "负责协调技术团队和资源",
+                    "goal": "确保技术团队高效协作，优化开发流程和资源分配",
+                    "backstory": "你是一位经验丰富的项目经理，擅长敏捷开发方法，能够有效协调跨职能技术团队。"
+                },
+                AgentRole.EXECUTOR: {
+                    "name": "开发工程师",
+                    "role": "负责实现技术方案和代码开发",
+                    "goal": "高质量地实现技术方案，确保代码质量和项目进度",
+                    "backstory": "你是一位技术精湛的开发工程师，精通多种编程语言和框架，能够高效实现复杂的技术功能。"
+                },
+                AgentRole.REVIEWER: {
+                    "name": "质量保证工程师",
+                    "role": "负责审查代码质量和系统性能",
+                    "goal": "全面审查代码质量和系统性能，确保产品符合质量标准",
+                    "backstory": "你是一位严谨的质量保证工程师，具有敏锐的细节洞察力，能够发现潜在的技术问题并提出改进方案。"
+                }
             },
-            AgentRole.EXECUTOR: {
-                "name": "供应链执行者",
-                "role": "负责执行供应链计划和任务",
-                "goal": "高效执行供应链计划，确保各项任务按时完成",
-                "backstory": "你是一位经验丰富的供应链执行专家，擅长将计划转化为实际行动，能够有效应对执行过程中的各种挑战。"
-            },
-            AgentRole.REVIEWER: {
-                "name": "供应链审查者",
-                "role": "负责审查供应链流程和结果",
-                "goal": "全面审查供应链流程和结果，确保质量和效率",
-                "backstory": "你是一位严谨的供应链审查专家，具有敏锐的洞察力，能够发现潜在问题并提出改进建议。"
+            BusinessDomain.RESEARCH: {
+                AgentRole.PLANNER: {
+                    "name": "研究规划师",
+                    "role": "负责设计研究框架和方法论",
+                    "goal": "根据研究目标设计科学的研究框架和方法论",
+                    "backstory": "你是一位资深的研究规划师，拥有丰富的研究设计经验，擅长创建严谨、科学的研究方案。"
+                },
+                AgentRole.ANALYST: {
+                    "name": "数据分析师",
+                    "role": "负责收集和分析研究数据",
+                    "goal": "系统性地收集和分析研究数据，提取有价值的洞察和结论",
+                    "backstory": "你是一位专业的研究数据分析师，精通各种统计分析和数据可视化方法，能够从复杂数据中发现规律和趋势。"
+                },
+                AgentRole.COORDINATOR: {
+                    "name": "研究协调员",
+                    "role": "负责协调研究团队和资源",
+                    "goal": "确保研究团队高效协作，优化研究流程和资源分配",
+                    "backstory": "你是一位经验丰富的研究协调员，擅长跨学科研究团队的协作，能够有效管理研究项目的各个方面。"
+                },
+                AgentRole.EXECUTOR: {
+                    "name": "研究助理",
+                    "role": "负责执行研究任务和数据收集",
+                    "goal": "高效执行研究任务，确保数据收集的准确性和完整性",
+                    "backstory": "你是一位细致的研究助理，精通各种研究方法和数据收集技术，能够准确执行研究计划。"
+                },
+                AgentRole.REVIEWER: {
+                    "name": "同行评议专家",
+                    "role": "负责审查研究方法和结论",
+                    "goal": "全面审查研究方法和结论，确保研究的科学性和可靠性",
+                    "backstory": "你是一位严谨的同行评议专家，具有敏锐的批判性思维，能够识别研究中的潜在问题并提出改进建议。"
+                }
             }
         }
     
-    def _load_task_templates(self) -> Dict[str, Dict[str, str]]:
+    def _load_task_templates(self) -> Dict[str, Dict[str, Dict[str, str]]]:
         """加载任务模板"""
         return {
-            "analysis": {
-                "name": "供应链分析",
-                "description": "分析当前供应链状况，识别关键问题和机会",
-                "expected_output": "详细的供应链分析报告，包括现状、问题和机会"
+            BusinessDomain.GENERAL: {
+                "analysis": {
+                    "name": "分析",
+                    "description": "分析当前状况，识别关键问题和机会",
+                    "expected_output": "详细的分析报告，包括现状、问题和机会"
+                },
+                "planning": {
+                    "name": "规划",
+                    "description": "根据分析结果制定优化规划",
+                    "expected_output": "全面的优化规划，包括目标、策略和实施步骤"
+                },
+                "coordination": {
+                    "name": "协调",
+                    "description": "协调各环节，确保规划顺利实施",
+                    "expected_output": "协调计划，包括沟通机制和资源分配"
+                },
+                "execution": {
+                    "name": "执行",
+                    "description": "执行规划，监控实施进度",
+                    "expected_output": "执行报告，包括进度、成果和问题"
+                },
+                "review": {
+                    "name": "审查",
+                    "description": "审查执行结果，评估效果并提出改进建议",
+                    "expected_output": "审查报告，包括效果评估和改进建议"
+                }
             },
-            "planning": {
-                "name": "供应链规划",
-                "description": "根据分析结果制定供应链优化规划",
-                "expected_output": "全面的供应链优化规划，包括目标、策略和实施步骤"
+            BusinessDomain.SUPPLY_CHAIN: {
+                "analysis": {
+                    "name": "供应链分析",
+                    "description": "分析当前供应链状况，识别关键问题和机会",
+                    "expected_output": "详细的供应链分析报告，包括现状、问题和机会"
+                },
+                "planning": {
+                    "name": "供应链规划",
+                    "description": "根据分析结果制定供应链优化规划",
+                    "expected_output": "全面的供应链优化规划，包括目标、策略和实施步骤"
+                },
+                "coordination": {
+                    "name": "供应链协调",
+                    "description": "协调供应链各环节，确保规划顺利实施",
+                    "expected_output": "供应链协调计划，包括沟通机制和资源分配"
+                },
+                "execution": {
+                    "name": "供应链执行",
+                    "description": "执行供应链规划，监控实施进度",
+                    "expected_output": "供应链执行报告，包括进度、成果和问题"
+                },
+                "review": {
+                    "name": "供应链审查",
+                    "description": "审查供应链执行结果，评估效果并提出改进建议",
+                    "expected_output": "供应链审查报告，包括效果评估和改进建议"
+                }
             },
-            "coordination": {
-                "name": "供应链协调",
-                "description": "协调供应链各环节，确保规划顺利实施",
-                "expected_output": "供应链协调计划，包括沟通机制和资源分配"
+            BusinessDomain.TECHNOLOGY: {
+                "analysis": {
+                    "name": "技术分析",
+                    "description": "分析当前技术状况，识别技术问题和机会",
+                    "expected_output": "详细的技术分析报告，包括现状、问题和机会"
+                },
+                "planning": {
+                    "name": "技术规划",
+                    "description": "根据分析结果制定技术实施规划",
+                    "expected_output": "全面的技术实施规划，包括架构设计、技术选型和实施步骤"
+                },
+                "coordination": {
+                    "name": "项目协调",
+                    "description": "协调技术团队和资源，确保项目顺利实施",
+                    "expected_output": "项目协调计划，包括团队分工、沟通机制和资源分配"
+                },
+                "execution": {
+                    "name": "开发执行",
+                    "description": "执行技术方案，监控开发进度",
+                    "expected_output": "开发执行报告，包括进度、成果和技术问题"
+                },
+                "review": {
+                    "name": "技术审查",
+                    "description": "审查技术实现和系统性能，评估质量并提出改进建议",
+                    "expected_output": "技术审查报告，包括代码质量评估和性能优化建议"
+                }
             },
-            "execution": {
-                "name": "供应链执行",
-                "description": "执行供应链规划，监控实施进度",
-                "expected_output": "供应链执行报告，包括进度、成果和问题"
-            },
-            "review": {
-                "name": "供应链审查",
-                "description": "审查供应链执行结果，评估效果并提出改进建议",
-                "expected_output": "供应链审查报告，包括效果评估和改进建议"
+            BusinessDomain.RESEARCH: {
+                "analysis": {
+                    "name": "文献综述",
+                    "description": "收集和分析相关文献，确定研究现状和空白",
+                    "expected_output": "详细的文献综述报告，包括研究现状、理论框架和研究空白"
+                },
+                "planning": {
+                    "name": "研究设计",
+                    "description": "根据文献综述设计研究方案和方法论",
+                    "expected_output": "完整的研究设计方案，包括研究问题、假设、方法和数据收集计划"
+                },
+                "coordination": {
+                    "name": "研究协调",
+                    "description": "协调研究团队和资源，确保研究顺利进行",
+                    "expected_output": "研究协调计划，包括团队分工、时间表和资源分配"
+                },
+                "execution": {
+                    "name": "数据收集",
+                    "description": "执行研究方案，收集和分析数据",
+                    "expected_output": "数据收集报告，包括数据质量、初步分析结果和方法论执行情况"
+                },
+                "review": {
+                    "name": "结果评估",
+                    "description": "评估研究结果，验证假设并得出结论",
+                    "expected_output": "研究评估报告，包括结果解释、假设验证和研究局限性"
+                }
             }
         }
     
     def generate_crew_config(
         self,
         business_process: str,
-        crew_name: str = "供应链优化团队",
+        crew_name: str = "专业团队",
         process_type: str = "sequential",
         custom_agents: Optional[List[Dict[str, Any]]] = None,
         custom_tasks: Optional[List[Dict[str, Any]]] = None
@@ -166,6 +382,9 @@ class CrewAIGenerator:
         Returns:
             CrewConfig: 生成的团队配置
         """
+        # 检测业务领域
+        domain = self._detect_domain(business_process)
+        
         # 分析业务流程，确定需要的角色
         required_roles = self._analyze_process_for_roles(business_process)
         
@@ -178,7 +397,10 @@ class CrewAIGenerator:
         else:
             # 使用模板生成智能体
             for role in required_roles:
-                template = self.agent_templates.get(role, self.agent_templates[AgentRole.PLANNER])
+                # 获取领域特定的模板，如果不存在则使用通用模板
+                domain_templates = self.agent_templates.get(domain, self.agent_templates[BusinessDomain.GENERAL])
+                template = domain_templates.get(role, domain_templates[AgentRole.PLANNER])
+                
                 agent = CrewAgentConfig(
                     name=f"{template['name']}_{role}",
                     role=template["role"],
@@ -197,7 +419,9 @@ class CrewAIGenerator:
             # 根据业务流程生成任务
             task_types = self._analyze_process_for_tasks(business_process)
             for i, task_type in enumerate(task_types):
-                template = self.task_templates.get(task_type, self.task_templates["planning"])
+                # 获取领域特定的模板，如果不存在则使用通用模板
+                domain_templates = self.task_templates.get(domain, self.task_templates[BusinessDomain.GENERAL])
+                template = domain_templates.get(task_type, domain_templates["planning"])
                 agent_role = required_roles[min(i, len(required_roles)-1)]
                 agent_name = agents[required_roles.index(agent_role)].name
                 
@@ -212,7 +436,7 @@ class CrewAIGenerator:
         # 创建团队配置
         crew_config = CrewConfig(
             name=crew_name,
-            description=f"基于业务流程 '{business_process}' 生成的供应链优化团队",
+            description=f"基于业务需求 '{business_process}' 生成的专业团队",
             agents=agents,
             tasks=tasks,
             process=process_type,
@@ -349,7 +573,7 @@ class CrewAIGenerator:
 # 便捷函数
 def generate_crew_from_process(
     business_process: str,
-    crew_name: str = "供应链优化团队",
+    crew_name: str = "专业团队",
     process_type: str = "sequential",
     output_file: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -384,7 +608,7 @@ class CrewAIGeneratorTool(BaseTool):
     """CrewAI配置生成工具类"""
     
     name: str = "crewai_generator"
-    description: str = "根据业务流程生成CrewAI团队配置，用于创建供应链优化团队"
+    description: str = "根据业务需求生成CrewAI团队配置，支持多业务领域的专业团队创建"
     generator: CrewAIGenerator = Field(default_factory=CrewAIGenerator)
     
     def _run(self, business_process: str, **kwargs) -> Dict[str, Any]:
@@ -398,7 +622,7 @@ class CrewAIGeneratorTool(BaseTool):
         Returns:
             Dict: 生成的CrewAI配置字典
         """
-        crew_name = kwargs.get("crew_name", "供应链优化团队")
+        crew_name = kwargs.get("crew_name", "专业团队")
         process_type = kwargs.get("process_type", "sequential")
         output_file = kwargs.get("output_file", None)
         
