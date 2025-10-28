@@ -317,45 +317,179 @@ class N8NGenerateAndCreateWorkflowTool(BaseTool):
         
         nodes.append(trigger_node)
         
-        # 2. 添加一个简单的处理节点
+        # 2. 根据描述添加完整的业务流程节点
         prev_node_name = nodes[0]["name"]
         
-        # 根据描述添加适当的节点
-        if "采购" in description or "purchase" in description_lower or "order" in description_lower:
-            # 采购流程工作流
+        if "采购" in description or "purchase" in description_lower or "procurement" in description_lower:
+            # 完整的采购流程（4个节点）
+            # 节点1: 创建采购申请
             nodes.append({
                 "parameters": {
                     "values": {
                         "string": [
-                            {"name": "requestId", "value": "PR-001"},
+                            {"name": "requestId", "value": "={{$now.format('YYYYMMDD')}}-{{$runIndex}}"},
                             {"name": "status", "value": "pending"},
-                            {"name": "message", "value": "Purchase request created"}
+                            {"name": "itemName", "value": "办公用品"},
+                            {"name": "quantity", "value": "10"},
+                            {"name": "approver", "value": "manager@example.com"}
                         ]
                     }
                 },
-                "name": "SetData",
+                "name": "创建采购申请",
                 "type": "n8n-nodes-base.set",
                 "typeVersion": 3,
                 "position": [450, 300]
             })
-        else:
-            # 默认：简单的数据设置节点
+            connections[prev_node_name] = {
+                "main": [[{"node": "创建采购申请", "type": "main", "index": 0}]]
+            }
+            
+            # 节点2: 发送审批通知
+            nodes.append({
+                "parameters": {
+                    "method": "POST",
+                    "url": "https://api.example.com/send-approval",
+                    "options": {},
+                    "bodyParametersJson": "={\"requestId\": \"{{$json.requestId}}\", \"approver\": \"{{$json.approver}}\"}"
+                },
+                "name": "发送审批通知",
+                "type": "n8n-nodes-base.httpRequest",
+                "typeVersion": 4,
+                "position": [650, 300]
+            })
+            connections["创建采购申请"] = {
+                "main": [[{"node": "发送审批通知", "type": "main", "index": 0}]]
+            }
+            
+            # 节点3: 审批通过后创建订单
             nodes.append({
                 "parameters": {
                     "values": {
-                        "string": [{"name": "result", "value": "Workflow executed successfully"}]
+                        "string": [
+                            {"name": "orderId", "value": "={{$json.requestId}}"},
+                            {"name": "status", "value": "approved"},
+                            {"name": "orderDate", "value": "={{$now.format('YYYY-MM-DD')}}"}
+                        ]
                     }
                 },
-                "name": "SetData",
+                "name": "创建采购订单",
+                "type": "n8n-nodes-base.set",
+                "typeVersion": 3,
+                "position": [850, 300]
+            })
+            connections["发送审批通知"] = {
+                "main": [[{"node": "创建采购订单", "type": "main", "index": 0}]]
+            }
+            
+            # 节点4: 更新库存
+            nodes.append({
+                "parameters": {
+                    "values": {
+                        "string": [
+                            {"name": "message", "value": "采购流程完成"},
+                            {"name": "orderId", "value": "={{$json.orderId}}"},
+                            {"name": "inventoryUpdated", "value": "true"}
+                        ]
+                    }
+                },
+                "name": "更新库存状态",
+                "type": "n8n-nodes-base.set",
+                "typeVersion": 3,
+                "position": [1050, 300]
+            })
+            connections["创建采购订单"] = {
+                "main": [[{"node": "更新库存状态", "type": "main", "index": 0}]]
+            }
+            
+        elif "库存" in description or "inventory" in description_lower:
+            # 库存检查流程（3个节点）
+            nodes.append({
+                "parameters": {
+                    "method": "GET",
+                    "url": "https://api.example.com/inventory/check",
+                    "options": {}
+                },
+                "name": "检查库存",
+                "type": "n8n-nodes-base.httpRequest",
+                "typeVersion": 4,
+                "position": [450, 300]
+            })
+            connections[prev_node_name] = {
+                "main": [[{"node": "检查库存", "type": "main", "index": 0}]]
+            }
+            
+            nodes.append({
+                "parameters": {
+                    "conditions": {
+                        "number": [
+                            {"value1": "={{$json.quantity}}", "operation": "smaller", "value2": "10"}
+                        ]
+                    }
+                },
+                "name": "判断是否低于安全库存",
+                "type": "n8n-nodes-base.if",
+                "typeVersion": 1,
+                "position": [650, 300]
+            })
+            connections["检查库存"] = {
+                "main": [[{"node": "判断是否低于安全库存", "type": "main", "index": 0}]]
+            }
+            
+            nodes.append({
+                "parameters": {
+                    "values": {
+                        "string": [
+                            {"name": "alert", "value": "库存不足，需要补货"},
+                            {"name": "quantity", "value": "={{$json.quantity}}"}
+                        ]
+                    }
+                },
+                "name": "发送库存警告",
+                "type": "n8n-nodes-base.set",
+                "typeVersion": 3,
+                "position": [850, 200]
+            })
+            connections["判断是否低于安全库存"] = {
+                "main": [[{"node": "发送库存警告", "type": "main", "index": 0}], []]
+            }
+            
+        else:
+            # 默认：简单的3节点流程
+            nodes.append({
+                "parameters": {
+                    "values": {
+                        "string": [
+                            {"name": "step", "value": "1"},
+                            {"name": "data", "value": "处理数据"}
+                        ]
+                    }
+                },
+                "name": "数据处理",
                 "type": "n8n-nodes-base.set",
                 "typeVersion": 3,
                 "position": [450, 300]
             })
-        
-        # 连接节点
-        connections[prev_node_name] = {
-            "main": [[{"node": "SetData", "type": "main", "index": 0}]]
-        }
+            connections[prev_node_name] = {
+                "main": [[{"node": "数据处理", "type": "main", "index": 0}]]
+            }
+            
+            nodes.append({
+                "parameters": {
+                    "values": {
+                        "string": [
+                            {"name": "step", "value": "2"},
+                            {"name": "result", "value": "处理完成"}
+                        ]
+                    }
+                },
+                "name": "生成结果",
+                "type": "n8n-nodes-base.set",
+                "typeVersion": 3,
+                "position": [650, 300]
+            })
+            connections["数据处理"] = {
+                "main": [[{"node": "生成结果", "type": "main", "index": 0}]]
+            }
         
         return {
             "name": description[:50],
