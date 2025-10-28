@@ -272,9 +272,188 @@ class N8NGenerateAndCreateWorkflowTool(BaseTool):
         object.__setattr__(self, 'client', N8NAPIClient(self.api_url, self.api_key))
         object.__setattr__(self, 'logger', logging.getLogger(__name__))
     
-    def _generate_workflow(self, description: str) -> Dict[str, Any]:
-        """根据描述生成简单的工作流"""
-        self.logger.info(f"生成简化工作流: {description[:100]}...")
+    def _generate_workflow_with_llm(self, description: str) -> Dict[str, Any]:
+        """使用 LLM 智能生成工作流结构"""
+        from src.infrastructure.llm.llm_factory import LLMFactory
+        
+        self.logger.info(f"使用 LLM 生成工作流: {description}")
+        
+        # 创建 LLM 实例
+        llm = LLMFactory.create_llm(provider="siliconflow")
+        
+        # 设计提示词，让 LLM 理解 n8n 工作流结构
+        prompt = f"""你是一个 n8n 工作流设计专家。根据用户需求设计一个简洁但完整的工作流。
+
+用户需求: {description}
+
+请设计一个包含 3-6 个节点的工作流，要求：
+1. 第一个节点必须是触发器（trigger）
+2. 后续节点实现业务逻辑
+3. 节点之间要有清晰的连接关系
+4. 使用真实可用的 n8n 节点类型
+
+可用的节点类型：
+- 触发器: manualTrigger, webhook, scheduleTrigger
+- 数据处理: set (设置变量), if (条件判断), merge (合并数据), splitInBatches (批处理)
+- HTTP: httpRequest (API 调用)
+- 其他: code (JavaScript代码), function (函数节点)
+
+请以 JSON 格式返回工作流设计，格式如下：
+{{
+  "workflow_name": "工作流名称",
+  "nodes": [
+    {{
+      "name": "节点名称",
+      "type": "节点类型（如 manualTrigger, set, httpRequest 等）",
+      "description": "节点功能描述",
+      "position": [x坐标, y坐标]
+    }}
+  ],
+  "connections": [
+    {{
+      "from": "源节点名称",
+      "to": "目标节点名称"
+    }}
+  ]
+}}
+
+只返回 JSON，不要其他说明。"""
+        
+        try:
+            # 调用 LLM 生成设计
+            response = llm.invoke(prompt)
+            design_text = response.content if hasattr(response, 'content') else str(response)
+            
+            # 清理可能的 markdown 代码块
+            if "```json" in design_text:
+                design_text = design_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in design_text:
+                design_text = design_text.split("```")[1].split("```")[0].strip()
+            
+            # 解析 LLM 的设计
+            design = json.loads(design_text)
+            
+            # 将设计转换为 n8n 格式
+            return self._convert_design_to_n8n(design, description)
+            
+        except Exception as e:
+            self.logger.error(f"LLM 生成工作流失败，使用简化版本: {e}")
+            # 如果 LLM 失败，使用简化的默认工作流
+            return self._generate_simple_fallback_workflow(description)
+    
+    def _convert_design_to_n8n(self, design: Dict, description: str) -> Dict[str, Any]:
+        """将 LLM 的设计转换为 n8n 工作流格式"""
+        nodes = []
+        connections = {}
+        
+        # 转换节点
+        for i, node_design in enumerate(design.get("nodes", [])):
+            node_type = node_design.get("type", "n8n-nodes-base.set")
+            if not node_type.startswith("n8n-nodes-base."):
+                node_type = f"n8n-nodes-base.{node_type}"
+            
+            # 根据节点类型设置参数
+            parameters = self._get_node_parameters(node_type, node_design)
+            
+            node = {
+                "name": node_design.get("name", f"Node{i+1}"),
+                "type": node_type,
+                "typeVersion": self._get_type_version(node_type),
+                "position": node_design.get("position", [250 + i*200, 300]),
+                "parameters": parameters
+            }
+            nodes.append(node)
+        
+        # 转换连接
+        for conn in design.get("connections", []):
+            from_node = conn.get("from")
+            to_node = conn.get("to")
+            if from_node and to_node:
+                if from_node not in connections:
+                    connections[from_node] = {"main": [[]]}
+                connections[from_node]["main"][0].append({
+                    "node": to_node,
+                    "type": "main",
+                    "index": 0
+                })
+        
+        return {
+            "name": design.get("workflow_name", description[:50]),
+            "nodes": nodes,
+            "connections": connections,
+            "settings": {
+                "executionOrder": "v1"
+            }
+        }
+    
+    def _get_node_parameters(self, node_type: str, node_design: Dict) -> Dict:
+        """根据节点类型生成参数"""
+        if "trigger" in node_type.lower():
+            if "schedule" in node_type.lower():
+                return {
+                    "rule": {
+                        "interval": [{"field": "hours", "hoursInterval": 1}]
+                    }
+                }
+            elif "webhook" in node_type.lower():
+                return {
+                    "path": "webhook",
+                    "responseMode": "onReceived"
+                }
+            else:
+                return {}
+        
+        elif "httpRequest" in node_type:
+            return {
+                "method": "POST",
+                "url": "https://api.example.com/endpoint",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={}",
+                "options": {}
+            }
+        
+        elif node_type == "n8n-nodes-base.set":
+            desc = node_design.get("description", "")
+            return {
+                "values": {
+                    "string": [
+                        {"name": "data", "value": desc or "处理数据"},
+                        {"name": "timestamp", "value": "={{$now.format('YYYY-MM-DD HH:mm:ss')}}"}
+                    ]
+                },
+                "options": {}
+            }
+        
+        elif node_type == "n8n-nodes-base.if":
+            return {
+                "conditions": {
+                    "string": [
+                        {"value1": "={{$json.status}}", "operation": "equals", "value2": "active"}
+                    ]
+                }
+            }
+        
+        else:
+            return {}
+    
+    def _get_type_version(self, node_type: str) -> int:
+        """获取节点类型版本"""
+        version_map = {
+            "n8n-nodes-base.httpRequest": 4,
+            "n8n-nodes-base.set": 3,
+            "n8n-nodes-base.if": 1,
+            "n8n-nodes-base.merge": 2,
+            "n8n-nodes-base.splitInBatches": 2,
+            "n8n-nodes-base.scheduleTrigger": 1,
+            "n8n-nodes-base.webhook": 1,
+            "n8n-nodes-base.manualTrigger": 1,
+        }
+        return version_map.get(node_type, 1)
+    
+    def _generate_simple_fallback_workflow(self, description: str) -> Dict[str, Any]:
+        """简化的备用工作流（当 LLM 失败时）"""
+        self.logger.info(f"生成简化备用工作流: {description[:100]}...")
         
         description_lower = description.lower()
         
@@ -321,136 +500,299 @@ class N8NGenerateAndCreateWorkflowTool(BaseTool):
         prev_node_name = nodes[0]["name"]
         
         if "采购" in description or "purchase" in description_lower or "procurement" in description_lower:
-            # 完整的采购流程（4个节点）
-            # 节点1: 创建采购申请
+            # 完整的采购自动化流程（7个节点，包含条件判断）
+            
+            # 节点1: 接收采购请求数据
             nodes.append({
                 "parameters": {
                     "values": {
                         "string": [
-                            {"name": "requestId", "value": "={{$now.format('YYYYMMDD')}}-{{$runIndex}}"},
-                            {"name": "status", "value": "pending"},
+                            {"name": "requestId", "value": "={{$now.format('YYYYMMDD-HHmmss')}}-{{$runIndex}}"},
                             {"name": "itemName", "value": "办公用品"},
-                            {"name": "quantity", "value": "10"},
-                            {"name": "approver", "value": "manager@example.com"}
+                            {"name": "quantity", "value": "50"},
+                            {"name": "unitPrice", "value": "100"},
+                            {"name": "totalAmount", "value": "={{$json.quantity * $json.unitPrice}}"},
+                            {"name": "requestedBy", "value": "采购部"},
+                            {"name": "urgency", "value": "normal"}
                         ]
-                    }
+                    },
+                    "options": {}
                 },
-                "name": "创建采购申请",
+                "name": "接收采购请求",
                 "type": "n8n-nodes-base.set",
                 "typeVersion": 3,
                 "position": [450, 300]
             })
             connections[prev_node_name] = {
-                "main": [[{"node": "创建采购申请", "type": "main", "index": 0}]]
+                "main": [[{"node": "接收采购请求", "type": "main", "index": 0}]]
             }
             
-            # 节点2: 发送审批通知
+            # 节点2: 检查预算和库存
             nodes.append({
                 "parameters": {
                     "method": "POST",
-                    "url": "https://api.example.com/send-approval",
-                    "options": {},
-                    "bodyParametersJson": "={\"requestId\": \"{{$json.requestId}}\", \"approver\": \"{{$json.approver}}\"}"
+                    "url": "https://api.example.com/check-budget",
+                    "sendBody": true,
+                    "specifyBody": "json",
+                    "jsonBody": "={\"amount\": {{$json.totalAmount}}, \"requestId\": \"{{$json.requestId}}\"}",
+                    "options": {}
                 },
-                "name": "发送审批通知",
+                "name": "检查预算可用性",
                 "type": "n8n-nodes-base.httpRequest",
                 "typeVersion": 4,
                 "position": [650, 300]
             })
-            connections["创建采购申请"] = {
-                "main": [[{"node": "发送审批通知", "type": "main", "index": 0}]]
+            connections["接收采购请求"] = {
+                "main": [[{"node": "检查预算可用性", "type": "main", "index": 0}]]
             }
             
-            # 节点3: 审批通过后创建订单
-            nodes.append({
-                "parameters": {
-                    "values": {
-                        "string": [
-                            {"name": "orderId", "value": "={{$json.requestId}}"},
-                            {"name": "status", "value": "approved"},
-                            {"name": "orderDate", "value": "={{$now.format('YYYY-MM-DD')}}"}
-                        ]
-                    }
-                },
-                "name": "创建采购订单",
-                "type": "n8n-nodes-base.set",
-                "typeVersion": 3,
-                "position": [850, 300]
-            })
-            connections["发送审批通知"] = {
-                "main": [[{"node": "创建采购订单", "type": "main", "index": 0}]]
-            }
-            
-            # 节点4: 更新库存
-            nodes.append({
-                "parameters": {
-                    "values": {
-                        "string": [
-                            {"name": "message", "value": "采购流程完成"},
-                            {"name": "orderId", "value": "={{$json.orderId}}"},
-                            {"name": "inventoryUpdated", "value": "true"}
-                        ]
-                    }
-                },
-                "name": "更新库存状态",
-                "type": "n8n-nodes-base.set",
-                "typeVersion": 3,
-                "position": [1050, 300]
-            })
-            connections["创建采购订单"] = {
-                "main": [[{"node": "更新库存状态", "type": "main", "index": 0}]]
-            }
-            
-        elif "库存" in description or "inventory" in description_lower:
-            # 库存检查流程（3个节点）
-            nodes.append({
-                "parameters": {
-                    "method": "GET",
-                    "url": "https://api.example.com/inventory/check",
-                    "options": {}
-                },
-                "name": "检查库存",
-                "type": "n8n-nodes-base.httpRequest",
-                "typeVersion": 4,
-                "position": [450, 300]
-            })
-            connections[prev_node_name] = {
-                "main": [[{"node": "检查库存", "type": "main", "index": 0}]]
-            }
-            
+            # 节点3: 判断金额是否需要特殊审批
             nodes.append({
                 "parameters": {
                     "conditions": {
                         "number": [
-                            {"value1": "={{$json.quantity}}", "operation": "smaller", "value2": "10"}
+                            {"value1": "={{$json.totalAmount}}", "operation": "larger", "value2": "10000"}
                         ]
                     }
                 },
-                "name": "判断是否低于安全库存",
+                "name": "判断是否需要高层审批",
                 "type": "n8n-nodes-base.if",
                 "typeVersion": 1,
-                "position": [650, 300]
+                "position": [850, 300]
             })
-            connections["检查库存"] = {
-                "main": [[{"node": "判断是否低于安全库存", "type": "main", "index": 0}]]
+            connections["检查预算可用性"] = {
+                "main": [[{"node": "判断是否需要高层审批", "type": "main", "index": 0}]]
             }
             
+            # 节点4a: 高层审批流程（金额>10000）
+            nodes.append({
+                "parameters": {
+                    "method": "POST",
+                    "url": "https://api.example.com/high-level-approval",
+                    "sendBody": true,
+                    "specifyBody": "json",
+                    "jsonBody": "={\"requestId\": \"{{$json.requestId}}\", \"amount\": {{$json.totalAmount}}, \"approver\": \"CFO\"}",
+                    "options": {}
+                },
+                "name": "发送高层审批",
+                "type": "n8n-nodes-base.httpRequest",
+                "typeVersion": 4,
+                "position": [1050, 200]
+            })
+            
+            # 节点4b: 部门经理审批（金额<=10000）
+            nodes.append({
+                "parameters": {
+                    "method": "POST",
+                    "url": "https://api.example.com/manager-approval",
+                    "sendBody": true,
+                    "specifyBody": "json",
+                    "jsonBody": "={\"requestId\": \"{{$json.requestId}}\", \"amount\": {{$json.totalAmount}}, \"approver\": \"Manager\"}",
+                    "options": {}
+                },
+                "name": "发送部门审批",
+                "type": "n8n-nodes-base.httpRequest",
+                "typeVersion": 4,
+                "position": [1050, 400]
+            })
+            
+            connections["判断是否需要高层审批"] = {
+                "main": [
+                    [{"node": "发送高层审批", "type": "main", "index": 0}],
+                    [{"node": "发送部门审批", "type": "main", "index": 0}]
+                ]
+            }
+            
+            # 节点5: 合并审批结果
+            nodes.append({
+                "parameters": {
+                    "mode": "mergeByPosition"
+                },
+                "name": "合并审批结果",
+                "type": "n8n-nodes-base.merge",
+                "typeVersion": 2,
+                "position": [1250, 300]
+            })
+            connections["发送高层审批"] = {
+                "main": [[{"node": "合并审批结果", "type": "main", "index": 0}]]
+            }
+            connections["发送部门审批"] = {
+                "main": [[{"node": "合并审批结果", "type": "main", "index": 1}]]
+            }
+            
+            # 节点6: 创建采购订单
             nodes.append({
                 "parameters": {
                     "values": {
                         "string": [
-                            {"name": "alert", "value": "库存不足，需要补货"},
-                            {"name": "quantity", "value": "={{$json.quantity}}"}
+                            {"name": "orderId", "value": "PO-={{$json.requestId}}"},
+                            {"name": "status", "value": "approved"},
+                            {"name": "approvedBy", "value": "={{$json.approver}}"},
+                            {"name": "orderDate", "value": "={{$now.format('YYYY-MM-DD HH:mm:ss')}}"},
+                            {"name": "expectedDelivery", "value": "={{$now.plus({days: 7}).format('YYYY-MM-DD')}}"}
+                        ]
+                    },
+                    "options": {}
+                },
+                "name": "生成采购订单",
+                "type": "n8n-nodes-base.set",
+                "typeVersion": 3,
+                "position": [1450, 300]
+            })
+            connections["合并审批结果"] = {
+                "main": [[{"node": "生成采购订单", "type": "main", "index": 0}]]
+            }
+            
+            # 节点7: 发送通知和更新系统
+            nodes.append({
+                "parameters": {
+                    "method": "POST",
+                    "url": "https://api.example.com/notify",
+                    "sendBody": true,
+                    "specifyBody": "json",
+                    "jsonBody": "={\"type\": \"purchase_order_created\", \"orderId\": \"{{$json.orderId}}\", \"message\": \"采购订单已创建并发送给供应商\", \"recipients\": [\"procurement@company.com\", \"finance@company.com\"]}",
+                    "options": {}
+                },
+                "name": "发送通知并更新系统",
+                "type": "n8n-nodes-base.httpRequest",
+                "typeVersion": 4,
+                "position": [1650, 300]
+            })
+            connections["生成采购订单"] = {
+                "main": [[{"node": "发送通知并更新系统", "type": "main", "index": 0}]]
+            }
+            
+        elif "库存" in description or "inventory" in description_lower:
+            # 智能库存管理流程（6个节点，包含循环和条件）
+            
+            # 节点1: 获取所有产品库存数据
+            nodes.append({
+                "parameters": {
+                    "method": "GET",
+                    "url": "https://api.example.com/inventory/all-products",
+                    "options": {
+                        "response": {
+                            "response": {
+                                "fullResponse": false,
+                                "neverError": false
+                            }
+                        }
+                    }
+                },
+                "name": "获取库存列表",
+                "type": "n8n-nodes-base.httpRequest",
+                "typeVersion": 4,
+                "position": [450, 300]
+            })
+            connections[prev_node_name] = {
+                "main": [[{"node": "获取库存列表", "type": "main", "index": 0}]]
+            }
+            
+            # 节点2: 分割数组以逐项处理
+            nodes.append({
+                "parameters": {
+                    "options": {}
+                },
+                "name": "拆分为单个产品",
+                "type": "n8n-nodes-base.splitInBatches",
+                "typeVersion": 2,
+                "position": [650, 300]
+            })
+            connections["获取库存列表"] = {
+                "main": [[{"node": "拆分为单个产品", "type": "main", "index": 0}]]
+            }
+            
+            # 节点3: 计算库存状态（安全/警告/危险）
+            nodes.append({
+                "parameters": {
+                    "values": {
+                        "number": [
+                            {"name": "safetyStock", "value": "={{$json.minStock * 1.5}}"},
+                            {"name": "dangerLevel", "value": "={{$json.minStock}}"}
+                        ],
+                        "string": [
+                            {"name": "status", "value": "={{$json.currentStock > $json.safetyStock ? 'safe' : ($json.currentStock > $json.dangerLevel ? 'warning' : 'danger')}}"},
+                            {"name": "needReorder", "value": "={{$json.currentStock <= $json.minStock ? 'yes' : 'no'}}"},
+                            {"name": "reorderQuantity", "value": "={{$json.maxStock - $json.currentStock}}"}
+                        ]
+                    },
+                    "options": {}
+                },
+                "name": "计算库存状态",
+                "type": "n8n-nodes-base.set",
+                "typeVersion": 3,
+                "position": [850, 300]
+            })
+            connections["拆分为单个产品"] = {
+                "main": [[{"node": "计算库存状态", "type": "main", "index": 0}]]
+            }
+            
+            # 节点4: 判断是否需要补货
+            nodes.append({
+                "parameters": {
+                    "conditions": {
+                        "string": [
+                            {"value1": "={{$json.needReorder}}", "operation": "equals", "value2": "yes"}
                         ]
                     }
                 },
-                "name": "发送库存警告",
+                "name": "判断是否需要补货",
+                "type": "n8n-nodes-base.if",
+                "typeVersion": 1,
+                "position": [1050, 300]
+            })
+            connections["计算库存状态"] = {
+                "main": [[{"node": "判断是否需要补货", "type": "main", "index": 0}]]
+            }
+            
+            # 节点5: 自动创建补货订单
+            nodes.append({
+                "parameters": {
+                    "method": "POST",
+                    "url": "https://api.example.com/create-reorder",
+                    "sendBody": true,
+                    "specifyBody": "json",
+                    "jsonBody": "={\"productId\": \"{{$json.productId}}\", \"productName\": \"{{$json.productName}}\", \"quantity\": {{$json.reorderQuantity}}, \"priority\": \"{{$json.status}}\", \"requestDate\": \"{{$now.format('YYYY-MM-DD')}}\"}",
+                    "options": {}
+                },
+                "name": "创建自动补货单",
+                "type": "n8n-nodes-base.httpRequest",
+                "typeVersion": 4,
+                "position": [1250, 200]
+            })
+            connections["判断是否需要补货"] = {
+                "main": [
+                    [{"node": "创建自动补货单", "type": "main", "index": 0}],
+                    []  # 不需要补货则跳过
+                ]
+            }
+            
+            # 节点6: 记录和发送报告
+            nodes.append({
+                "parameters": {
+                    "values": {
+                        "string": [
+                            {"name": "reportType", "value": "inventory_check"},
+                            {"name": "processedItems", "value": "={{$runIndex}}"},
+                            {"name": "reordersCreated", "value": "={{$json.orderId ? '1' : '0'}}"},
+                            {"name": "timestamp", "value": "={{$now.format('YYYY-MM-DD HH:mm:ss')}}"}
+                        ]
+                    },
+                    "options": {}
+                },
+                "name": "生成库存报告",
                 "type": "n8n-nodes-base.set",
                 "typeVersion": 3,
-                "position": [850, 200]
+                "position": [1450, 300]
             })
-            connections["判断是否低于安全库存"] = {
-                "main": [[{"node": "发送库存警告", "type": "main", "index": 0}], []]
+            
+            # 从创建补货单和跳过补货两条路径都连接到报告
+            connections["创建自动补货单"] = {
+                "main": [[{"node": "生成库存报告", "type": "main", "index": 0}]]
+            }
+            # 不需要补货的也连接到报告（使用拆分批次节点的循环连接）
+            connections["生成库存报告"] = {
+                "main": [[{"node": "拆分为单个产品", "type": "main", "index": 0}]]
             }
             
         else:
@@ -502,12 +844,12 @@ class N8NGenerateAndCreateWorkflowTool(BaseTool):
         }
     
     def _run(self, workflow_description: str) -> str:
-        """生成并创建工作流"""
+        """使用 LLM 智能生成并创建工作流"""
         try:
-            self.logger.info(f"生成工作流: {workflow_description}")
+            self.logger.info(f"使用 LLM 生成工作流: {workflow_description}")
             
-            # 1. 生成工作流配置
-            workflow = self._generate_workflow(workflow_description)
+            # 1. 使用 LLM 生成工作流配置
+            workflow = self._generate_workflow_with_llm(workflow_description)
             
             # 2. 创建到 n8n
             result = self.client.create_workflow(workflow)
