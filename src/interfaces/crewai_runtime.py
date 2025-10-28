@@ -200,10 +200,11 @@ class CrewAIRuntime:
                     self.logger.error("未找到CrewAI LLM配置，请检查config/base/services.yaml文件中的services.crewai.llm配置")
                     return False
                 
-                # 获取配置参数
+                # 🆕 获取配置参数（优先使用 EnvManager）
+                from src.config.env_manager import EnvManager
                 provider = crewai_llm_config.get("provider", "siliconflow")
-                api_key = crewai_llm_config.get("api_key") or os.getenv("SILICONFLOW_API_KEY")
-                base_url = crewai_llm_config.get("base_url") or "https://api.siliconflow.cn/v1"
+                api_key = crewai_llm_config.get("api_key") or EnvManager.SILICONFLOW_API_KEY
+                base_url = crewai_llm_config.get("base_url") or EnvManager.SILICONFLOW_BASE_URL
                 model_name = crewai_llm_config.get("default_model") or "deepseek-chat"
                 temperature = crewai_llm_config.get("temperature", 0.7)
                 max_tokens = crewai_llm_config.get("max_tokens", 1000)

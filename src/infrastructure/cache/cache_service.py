@@ -216,7 +216,8 @@ class RedisCacheService(CacheService):
         try:
             await self._redis.ping()
             return True
-        except:
+        except (ConnectionError, TimeoutError, Exception) as e:
+            self.logger.debug(f"Redis 连接检查失败: {e}")
             return False
     
     async def get(self, key: str) -> Optional[Any]:
@@ -232,11 +233,11 @@ class RedisCacheService(CacheService):
             # 尝试反序列化
             try:
                 return pickle.loads(value)
-            except:
+            except (pickle.UnpicklingError, AttributeError, EOFError, ImportError) as pickle_err:
                 # 如果反序列化失败，尝试JSON解析
                 try:
                     return json.loads(value)
-                except:
+                except (json.JSONDecodeError, TypeError, ValueError) as json_err:
                     # 如果都失败，直接返回字符串
                     return value.decode('utf-8') if isinstance(value, bytes) else value
         except Exception as e:

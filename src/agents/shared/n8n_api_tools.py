@@ -71,7 +71,8 @@ class N8NAPIClient:
                 try:
                     error_data = e.response.json()
                     error_msg = error_data.get('message', error_msg)
-                except:
+                except (ValueError, KeyError, AttributeError) as json_err:
+                    # JSON 解析失败，使用原始错误消息
                     pass
             raise Exception(f"N8N API 错误: {error_msg}")
     
@@ -880,7 +881,8 @@ class N8NExecuteWorkflowTool(BaseTool):
             if data:
                 try:
                     exec_data = json.loads(data)
-                except:
+                except (json.JSONDecodeError, TypeError, ValueError) as json_err:
+                    # JSON 解析失败，使用字符串包装
                     exec_data = {"input": data}
             
             result = self.client.execute_workflow(workflow_id, exec_data)

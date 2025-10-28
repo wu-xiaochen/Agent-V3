@@ -5,6 +5,7 @@
 
 import os
 import yaml
+from functools import lru_cache
 from typing import Dict, Any, Optional
 from pathlib import Path
 from src.shared.exceptions.exceptions import ConfigurationError
@@ -72,6 +73,30 @@ class ConfigLoader:
         self._configs[cache_key] = config
         
         return config
+    
+    @lru_cache(maxsize=32)
+    def _load_yaml_file_cached(self, file_path: str) -> Dict[str, Any]:
+        """
+        缓存的YAML文件加载（用于不可变路径）
+        
+        Args:
+            file_path: 文件路径（字符串，用于哈希）
+            
+        Returns:
+            配置字典
+        """
+        path_obj = Path(file_path)
+        if not path_obj.exists():
+            return {}
+        
+        try:
+            with open(path_obj, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+                return config if config is not None else {}
+        except yaml.YAMLError as e:
+            raise ConfigurationError(f"解析YAML文件失败 {file_path}: {str(e)}")
+        except Exception as e:
+            raise ConfigurationError(f"读取配置文件失败 {file_path}: {str(e)}")
     
     def _load_yaml_file(self, file_path: Path, required: bool = True) -> Dict[str, Any]:
         """

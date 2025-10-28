@@ -140,12 +140,43 @@ class EnvManager:
         """
         获取 n8n 配置
         
+        优先级:
+        1. 环境变量
+        2. tools_config.json
+        3. 默认值
+        
         Returns:
             n8n 配置字典
         """
+        api_url = cls.N8N_API_URL
+        api_key = cls.N8N_API_KEY
+        
+        # 如果环境变量没有 API Key，尝试从配置文件读取
+        if not api_key:
+            try:
+                import json
+                config_file = cls.PROJECT_ROOT / "config" / "tools" / "tools_config.json"
+                if config_file.exists():
+                    with open(config_file, 'r', encoding='utf-8') as f:
+                        tools_config = json.load(f)
+                        # 查找 n8n_mcp_generator 工具的配置
+                        for tool in tools_config.get("tools", []):
+                            if tool.get("name") == "n8n_mcp_generator":
+                                env_config = tool.get("env", {})
+                                api_key = env_config.get("N8N_API_KEY", "")
+                                if not api_url or api_url == "http://localhost:5678":
+                                    api_url = env_config.get("N8N_API_URL", api_url)
+                                break
+            except Exception as e:
+                logger.debug(f"从配置文件读取 n8n 配置失败: {e}")
+        
+        # 确保在非Docker环境下，host.docker.internal被替换为localhost
+        if "host.docker.internal" in api_url and not os.getenv("DOCKER_ENV"):
+            api_url = api_url.replace("host.docker.internal", "localhost")
+        
         return {
-            "api_url": cls.N8N_API_URL,
-            "api_key": cls.N8N_API_KEY
+            "api_url": api_url,
+            "api_key": api_key
         }
     
     @classmethod

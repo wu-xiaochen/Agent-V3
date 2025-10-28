@@ -67,12 +67,14 @@ class LLMFactory:
         Returns:
             OpenAI LLM实例
         """
-        api_key = config.get("api_key") or os.getenv("OPENAI_API_KEY")
+        # 🆕 优先使用 EnvManager
+        from src.config.env_manager import EnvManager
+        api_key = config.get("api_key") or EnvManager.OPENAI_API_KEY
         if not api_key:
             raise ValueError("未找到OpenAI API密钥，请在配置文件中设置或设置环境变量OPENAI_API_KEY")
         
-        model = config.get("model", "gpt-3.5-turbo")
-        base_url = config.get("base_url", "https://api.openai.com/v1")
+        model = config.get("model") or EnvManager.get("OPENAI_DEFAULT_MODEL", "gpt-3.5-turbo")
+        base_url = config.get("base_url") or EnvManager.OPENAI_BASE_URL
         
         # 根据模型类型决定使用ChatOpenAI还是OpenAI
         if "gpt-" in model:
@@ -154,7 +156,9 @@ class LLMFactory:
         Returns:
             硅基流动LLM实例
         """
-        api_key = config.get("api_key") or os.getenv("SILICONFLOW_API_KEY")
+        # 🆕 优先使用 EnvManager
+        from src.config.env_manager import EnvManager
+        api_key = config.get("api_key") or EnvManager.SILICONFLOW_API_KEY
         if not api_key:
             raise ValueError("未找到硅基流动API密钥，请在配置文件中设置或设置环境变量SILICONFLOW_API_KEY")
         
