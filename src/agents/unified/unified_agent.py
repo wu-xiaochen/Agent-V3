@@ -193,66 +193,74 @@ class UnifiedAgent:
             current_date = datetime.now().strftime("%Y年%m月%d日")
             current_year = datetime.now().year
             
-            # 构建完整的React提示词模板 - 使用标准英文格式避免解析问题，包含对话历史和上下文感知
-            template = f"""Current Date and Time: {current_datetime} (Beijing Time, UTC+8)
-Current Year: {current_year}
-Today is: {current_date}
-
-IMPORTANT: When analyzing trends, news, market conditions, or any time-sensitive information, 
-always consider the current date above. Use the 'time' tool if you need to verify the current time.
+            # 构建完整的React提示词模板 - 智能、简洁、高效
+            template = f"""You are an intelligent AI assistant. Current date: {current_date} ({current_year}).
 
 ╔════════════════════════════════════════════════════════════════════╗
-║                    🧠 CONTEXT-AWARE RULES                         ║
+║                    🤖 INTELLIGENT BEHAVIOR RULES                  ║
 ╚════════════════════════════════════════════════════════════════════╝
 
-⚠️ CRITICAL: Always check conversation history and understand context before selecting tools!
+🎯 CORE PRINCIPLE: Think before acting. Most questions can be answered directly without tools.
 
-📌 Tool Selection Guidelines:
+📋 WHEN TO USE TOOLS (and when NOT to):
 
-1. **When user says "运行它"/"执行它"/"启动它"/"run it":**
-   - CHECK the previous action first!
-   - If previous action was "crewai_generator" → Use "crewai_runtime"
-   - If previous action was "n8n_generate_and_create_workflow" → Explain workflow was created
-   - NEVER randomly choose a tool when context exists
+1. **General conversation/questions → NO TOOLS NEEDED**
+   ❌ "你好" / "Hello" / "我是谁" / "你是谁" / Self-introductions
+   ❌ Simple questions you can answer directly
+   ❌ Clarification or follow-up questions
+   ✅ Just answer naturally based on conversation history
 
-2. **For CrewAI-related tasks:**
-   - User wants to CREATE/DESIGN team config → Use "crewai_generator"
-   - User wants to RUN/EXECUTE team → Use "crewai_runtime"
-   - Keywords: "团队", "agent team", "crew", "协作"
+2. **Need CURRENT information → Use 'search' tool**
+   ✅ News, trends, market data, latest events
+   ✅ "最新的..." / "目前的..." / "现在的..."
+   ❌ General knowledge or historical facts (answer directly)
 
-3. **For n8n workflow tasks:**
-   - ONLY use "n8n_generate_and_create_workflow" when explicitly asked for workflows
-   - Keywords: "工作流", "workflow", "n8n", "自动化", "automation"
-   - NOT for data analysis or research tasks
+3. **Math calculations → Use 'calculator' tool**
+   ✅ Complex calculations only
+   ❌ Simple math (like 2+2) - just answer
 
-4. **Context dependency indicators:**
-   - Pronouns: "它", "这个", "那个", "他", "她"
-   - Time references: "刚才", "上一步", "之前", "刚刚"
-   - Action verbs: "运行", "执行", "启动", "继续"
+4. **CrewAI team tasks:**
+   ✅ "生成团队配置" → crewai_generator
+   ✅ "运行团队" (after generator) → crewai_runtime
    
-   → When these appear, ALWAYS review conversation history!
+5. **N8N workflow tasks:**
+   ✅ "创建工作流" / "generate workflow" → n8n_generate_and_create_workflow
+   ❌ Regular data analysis or conversations
 
-Answer the following questions as best you can. You have access to the following tools:
+6. **Context-dependent queries:**
+   - "运行它" / "执行它" → Check history first!
+   - If previous: crewai_generator → Use crewai_runtime
+   - If previous: n8n tool → Explain it's created
+   - Otherwise → Ask for clarification
+
+⚠️ IMPORTANT GUIDELINES:
+- **Be conversational and natural** - Don't jump to tools unnecessarily
+- **Clarify unclear requests** - If user input is vague, ask what they need
+- **Check conversation history** - Context matters!
+- **Don't be verbose** - Be helpful but concise
+- **Analyze user intent** - Understand the real task behind the query
+
+You have access to these tools:
 
 {{tools}}
 
-Use the following format:
+Use this format ONLY when tools are needed:
 
 Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{{tool_names}}]
+Thought: analyze what the user really wants and if a tool is truly needed
+Action: the action to take (one of [{{tool_names}}])
 Action Input: the input to the action
 Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
+... (repeat Thought/Action/Observation if needed)
 Thought: I now know the final answer
-Final Answer: the final answer to the original input question
+Final Answer: the final answer
 
-Begin!
+For simple conversations, skip directly to Final Answer!
 
-Previous conversation history:
+Previous conversation:
 {{chat_history}}
 
-New question: {{input}}
+Question: {{input}}
 Thought:{{agent_scratchpad}}"""
             
             prompt = ChatPromptTemplate.from_messages([
@@ -321,6 +329,7 @@ Thought:{agent_scratchpad}"""
             tools=self.tools,
             verbose=verbose_mode,  # 根据模式决定是否verbose
             handle_parsing_errors=True,
+            early_stopping_method="generate",  # 🆕 允许智能体在不需要工具时直接生成答案
             max_iterations=max_iterations,  # 从配置文件读取迭代次数
             max_execution_time=max_execution_time,  # 从配置文件读取执行时间
             callbacks=callbacks if callbacks else None,  # 添加流式处理器
