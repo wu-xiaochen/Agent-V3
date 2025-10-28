@@ -21,6 +21,42 @@
       "enabled": true
     },
     {
+      "type": "builtin",
+      "name": "data_analyzer",
+      "description": "数据分析工具",
+      "enabled": true
+    },
+    {
+      "type": "builtin",
+      "name": "forecasting_model",
+      "description": "需求预测工具",
+      "enabled": true
+    },
+    {
+      "type": "builtin",
+      "name": "optimization_engine",
+      "description": "优化引擎工具",
+      "enabled": true
+    },
+    {
+      "type": "builtin",
+      "name": "risk_assessment",
+      "description": "风险评估工具",
+      "enabled": true
+    },
+    {
+      "type": "builtin",
+      "name": "crewai_generator",
+      "description": "CrewAI团队配置生成工具",
+      "enabled": true
+    },
+    {
+      "type": "builtin",
+      "name": "crewai_runtime",
+      "description": "CrewAI运行时工具",
+      "enabled": true
+    },
+    {
       "type": "api",
       "name": "weather_api",
       "description": "天气查询API",
@@ -143,20 +179,41 @@
         "timestamp": "$.ts",
         "channel": "$.channel"
       }
+    },
+    {
+      "type": "mcp_stdio",
+      "name": "n8n_mcp_generator",
+      "description": "N8N工作流生成工具",
+      "enabled": true,
+      "command": "docker",
+      "args": ["exec", "n8n-mcp", "node", "dist/mcp/index.js"],
+      "env": {
+        "N8N_API_URL": "http://host.docker.internal:5678",
+        "N8N_API_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkNjU4MDQ2Ni01MDkyLTQyYmEtODc1NS1lMDM4M2M2MDAxNzMiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzYxNjMxNjA0LCJleHAiOjE3NjQyMTk2MDB9.Ktof_b_2Ejzd0sYTA2ITph8QdSZ35jKe-elgehjOCRQ"
+      },
+      "tools": [
+        "n8n_search_nodes",
+        "n8n_get_node_info",
+        "n8n_generate_workflow",
+        "n8n_validate_workflow",
+        "n8n_deploy_workflow"
+      ]
     }
   ],
   "tool_groups": {
     "basic": ["time", "search", "calculator"],
+    "supply_chain": ["data_analyzer", "forecasting_model", "optimization_engine", "risk_assessment", "crewai_generator", "crewai_runtime"],
     "external_apis": ["weather_api", "github_api"],
-    "mcp_tools": ["n8n_workflow", "slack_mcp"],
-    "all": ["time", "search", "calculator", "weather_api", "github_api", "n8n_workflow", "slack_mcp"]
+    "mcp_tools": ["n8n_workflow", "slack_mcp", "n8n_mcp_generator"],
+    "all": ["time", "search", "calculator", "data_analyzer", "forecasting_model", "optimization_engine", "risk_assessment", "crewai_generator", "crewai_runtime", "weather_api", "github_api", "n8n_workflow", "slack_mcp", "n8n_mcp_generator"]
   },
   "agent_tool_mapping": {
-    "unified_agent": ["time", "search", "calculator", "weather_api"],
+    "unified_agent": ["time", "search", "calculator", "crewai_generator", "crewai_runtime", "n8n_mcp_generator"],
+    "supply_chain_agent": ["time", "search", "calculator", "data_analyzer", "forecasting_model", "optimization_engine", "risk_assessment", "crewai_generator", "crewai_runtime", "n8n_mcp_generator"],
     "api_agent": ["weather_api", "github_api"],
-    "mcp_agent": ["n8n_workflow", "slack_mcp"],
+    "mcp_agent": ["n8n_workflow", "slack_mcp", "n8n_mcp_generator"],
     "dev_agent": ["time", "search", "calculator", "github_api"],
     "notification_agent": ["time", "slack_mcp"],
-    "full_stack_agent": ["time", "search", "calculator", "weather_api", "github_api", "n8n_workflow", "slack_mcp"]
+    "full_stack_agent": ["time", "search", "calculator", "weather_api", "github_api", "n8n_workflow", "slack_mcp", "n8n_mcp_generator", "crewai_generator", "crewai_runtime"]
   }
 }

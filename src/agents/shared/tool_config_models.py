@@ -13,6 +13,7 @@ class ToolType(str, Enum):
     BUILTIN = "builtin"
     API = "api"
     MCP = "mcp"
+    MCP_STDIO = "mcp_stdio"
 
 
 class AuthType(str, Enum):
@@ -90,6 +91,16 @@ class MCPToolConfig(ToolConfig):
     response_mapping: Dict[str, str] = Field(default_factory=dict, description="响应映射")
 
 
+class MCPStdioToolConfig(ToolConfig):
+    """MCP Stdio工具配置"""
+    type: ToolType = ToolType.MCP_STDIO
+    command: str = Field(..., description="启动MCP服务器的命令")
+    args: List[str] = Field(default_factory=list, description="命令参数")
+    env: Dict[str, str] = Field(default_factory=dict, description="环境变量")
+    timeout: int = Field(30, description="请求超时时间(秒)")
+    parameters: Dict[str, ToolParameter] = Field(default_factory=dict, description="工具参数定义")
+
+
 class ToolGroup(BaseModel):
     """工具组定义"""
     name: str = Field(..., description="工具组名称，必须唯一")
@@ -107,7 +118,7 @@ class ToolsConfiguration(BaseModel):
     """工具配置完整模型"""
     version: str = Field("1.0", description="配置版本")
     description: Optional[str] = Field(None, description="配置描述")
-    tools: List[Union[BuiltinToolConfig, APIToolConfig, MCPToolConfig]] = Field(..., description="工具定义列表")
+    tools: List[Union[BuiltinToolConfig, APIToolConfig, MCPToolConfig, MCPStdioToolConfig]] = Field(..., description="工具定义列表")
     tool_groups: List[ToolGroup] = Field(default_factory=list, description="工具组列表")
     agent_tool_mapping: Dict[str, List[str]] = Field(default_factory=dict, description="智能体到工具组的映射")
 
@@ -125,7 +136,7 @@ class ToolsConfiguration(BaseModel):
             raise ValueError("Tool group names must be unique")
         return v
 
-    def get_tool_by_name(self, name: str) -> Optional[Union[BuiltinToolConfig, APIToolConfig, MCPToolConfig]]:
+    def get_tool_by_name(self, name: str) -> Optional[Union[BuiltinToolConfig, APIToolConfig, MCPToolConfig, MCPStdioToolConfig]]:
         """根据名称获取工具配置"""
         for tool in self.tools:
             if tool.name == name:
@@ -139,7 +150,7 @@ class ToolsConfiguration(BaseModel):
                 return group
         return None
 
-    def get_tools_for_agent(self, agent_type: str) -> List[Union[BuiltinToolConfig, APIToolConfig, MCPToolConfig]]:
+    def get_tools_for_agent(self, agent_type: str) -> List[Union[BuiltinToolConfig, APIToolConfig, MCPToolConfig, MCPStdioToolConfig]]:
         """获取指定智能体类型的工具列表"""
         # 获取智能体对应的工具组名称列表
         group_names = self.agent_tool_mapping.get(agent_type, self.agent_tool_mapping.get("default", []))
@@ -161,6 +172,6 @@ class ToolsConfiguration(BaseModel):
         
         return tools
 
-    def get_enabled_tools(self) -> List[Union[BuiltinToolConfig, APIToolConfig, MCPToolConfig]]:
+    def get_enabled_tools(self) -> List[Union[BuiltinToolConfig, APIToolConfig, MCPToolConfig, MCPStdioToolConfig]]:
         """获取所有启用的工具"""
         return [tool for tool in self.tools if tool.enabled]

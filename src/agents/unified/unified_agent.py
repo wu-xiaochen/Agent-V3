@@ -13,8 +13,10 @@ from langchain_core.chat_history import InMemoryChatMessageHistory
 from src.infrastructure.llm.llm_factory import LLMFactory
 from src.agents.shared.tools import get_tools, get_tools_for_agent
 from src.agents.shared.output_formatter import OutputFormatter, OutputFormat
+from src.agents.shared.streaming_handler import StreamingDisplayHandler, SimpleStreamingHandler
 from src.config.config_loader import config_loader
 from src.prompts.prompt_loader import prompt_loader
+from src.core.services.context_manager import ConversationBufferWithSummary, ContextManager
 
 
 class UnifiedAgent:
@@ -27,6 +29,7 @@ class UnifiedAgent:
         redis_url: Optional[str] = None,
         session_id: Optional[str] = None,
         model_name: Optional[str] = None,
+        streaming_style: str = "simple",  # simple, detailed, none
         **kwargs
     ):
         """
@@ -35,11 +38,13 @@ class UnifiedAgent:
         Args:
             provider: LLM提供商
             memory: 是否启用记忆功能
-            redis_url: Redis连接URL，如果提供则使用Redis存储
+            redis_url: Redis连接URL，如果为None则从配置文件获取
             session_id: 会话ID，用于区分不同对话
             model_name: 模型名称
+            streaming_style: 流式输出样式 (simple=简洁, detailed=详细, none=无)
             **kwargs: 额外的LLM参数
         """
+        self.streaming_style = streaming_style
         # 处理模型名称参数
         if model_name:
             kwargs["model_name"] = model_name
@@ -47,6 +52,22 @@ class UnifiedAgent:
         self.llm = LLMFactory.create_llm(provider, **kwargs)
         self.agent_config = config_loader.get_agent_config()
         self.output_config = config_loader.get_output_config()
+        
+        # 如果没有提供redis_url，从配置文件获取
+        if redis_url is None and memory:
+            redis_config = config_loader.get_redis_config()
+            if redis_config:
+                host = redis_config.get("host", "localhost")
+                port = redis_config.get("port", 6379)
+                db = redis_config.get("db", 0)
+                password = redis_config.get("password", "")
+                
+                # 构建Redis URL
+                if password:
+                    redis_url = f"redis://:{password}@{host}:{port}/{db}"
+                else:
+                    redis_url = f"redis://{host}:{port}/{db}"
+        
         self.memory = self._create_memory(memory, redis_url, session_id)
         
         # 使用新的动态工具加载器
@@ -88,33 +109,32 @@ class UnifiedAgent:
         if redis_url:
             try:
                 from src.storage.redis_chat_history import RedisChatMessageHistory
+                print(f"✅ 使用Redis存储对话历史 (会话ID: {session_id or 'default'})")
                 return RedisChatMessageHistory(
                     session_id=session_id or "default",
                     redis_url=redis_url
                 )
             except ImportError:
-                print("Redis存储不可用，回退到内存存储")
+                print("⚠️  Redis存储不可用，回退到内存存储（带摘要功能）")
             except Exception as e:
-                print(f"Redis连接失败: {e}，回退到内存存储")
+                print(f"⚠️  Redis连接失败: {e}，回退到内存存储（带摘要功能）")
         
-        # 使用内存存储
-        memory_type = self.agent_config.get("memory_type", "buffer")
-        max_tokens = self.agent_config.get("max_memory_tokens", 2000)
+        # 使用内存存储（带摘要和压缩功能）
+        unified_config = config_loader.get_specific_agent_config("unified_agent")
+        memory_config = unified_config.get("memory", {})
         
-        # 使用新的记忆实现
-        if memory_type == "buffer":
-            # 使用InMemoryChatMessageHistory替代ConversationBufferMemory
-            return InMemoryChatMessageHistory()
-        elif memory_type == "summary":
-            # 对于摘要记忆，我们需要使用更复杂的实现
-            # 这里暂时使用InMemoryChatMessageHistory，实际应用中可以添加摘要逻辑
-            return InMemoryChatMessageHistory()
-        elif memory_type == "token_buffer":
-            # 对于token限制记忆，我们需要使用更复杂的实现
-            # 这里暂时使用InMemoryChatMessageHistory，实际应用中可以添加token限制逻辑
-            return InMemoryChatMessageHistory()
-        else:
-            raise ValueError(f"不支持的记忆类型: {memory_type}")
+        max_tokens = memory_config.get("max_conversation_length", 4000)
+        summary_threshold = memory_config.get("summary_interval", 10)
+        
+        print(f"✅ 使用内存存储对话历史（带自动摘要功能，每{summary_threshold}轮对话自动压缩）")
+        
+        # 使用带摘要功能的对话缓冲区
+        return ConversationBufferWithSummary(
+            llm=self.llm,
+            max_tokens=max_tokens,
+            summary_threshold=summary_threshold,
+            keep_recent=4  # 保留最近4轮完整对话
+        )
     
     def _create_agent(self):
         """
@@ -124,72 +144,82 @@ class UnifiedAgent:
             智能体实例
         """
         # 使用ReAct架构作为基础，但结合了其他智能体的特性
-        # 使用LangChain内置的ReAct提示词模板
-        from langchain import hub
-        
         # 获取统一智能体的配置
         unified_config = config_loader.get_specific_agent_config("unified_agent")
         
-        # 从配置中获取提示词文件路径，如果未配置则使用默认路径
-        prompts_file = unified_config.get("prompts_file", "src/prompts/prompts.py")
+        # 从配置中获取提示词键
+        system_prompt_key = unified_config.get("system_prompt", "supply_chain_planning")
         
         try:
-            # 尝试使用LangChain Hub中的ReAct提示词
-            prompt = hub.pull("hwchase17/react-chat")
+            # 尝试从配置文件加载提示词
+            prompts_config = config_loader.get_prompts_config()
+            prompts = prompts_config.get("prompts", {})
+            
+            # 获取系统提示词
+            prompt_config = prompts.get(system_prompt_key, {})
+            system_prompt_template = prompt_config.get("template", "")
+            
+            if not system_prompt_template:
+                # 回退到硬编码的提示词
+                print(f"未找到配置的提示词 {system_prompt_key}，使用默认提示词")
+                system_prompt_template = """你是一位专业的供应链管理专家和业务流程规划顾问。
+你的主要职责是理解用户的供应链需求，提供专业的业务流程规划建议。
+
+当用户询问关于n8n工作流或智能体对话生成时，你应该：
+1. 明确告诉用户你可以使用n8n_mcp_generator工具来生成工作流
+2. 询问用户需要什么类型的工作流或对话
+3. 使用n8n_mcp_generator工具来完成任务
+
+{agent_scratchpad}"""
+            
+            # 构建完整的React提示词模板 - 使用标准英文格式避免解析问题，包含对话历史
+            template = """Answer the following questions as best you can. You have access to the following tools:
+
+{tools}
+
+Use the following format:
+
+Question: the input question you must answer
+Thought: you should always think about what to do
+Action: the action to take, should be one of [{tool_names}]
+Action Input: the input to the action
+Observation: the result of the action
+... (this Thought/Action/Action Input/Observation can repeat N times)
+Thought: I now know the final answer
+Final Answer: the final answer to the original input question
+
+Begin!
+
+Previous conversation history:
+{chat_history}
+
+New question: {input}
+Thought:{agent_scratchpad}"""
+            
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", template)
+            ])
+            
         except Exception as e:
-            print(f"无法从LangChain Hub获取提示词，使用配置的提示词: {e}")
-            
-            # 使用提示词加载器加载系统提示词
-            system_prompt_key = unified_config.get("system_prompt_key", "UNIFIED_AGENT_SYSTEM_PROMPT")
-            
-            # 检查是否是Python文件，如果是则直接导入
-            if prompts_file.endswith('.py'):
-                try:
-                    # 动态导入Python模块
-                    import importlib.util
-                    spec = importlib.util.spec_from_file_location("prompts_module", prompts_file)
-                    prompts_module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(prompts_module)
-                    
-                    # 获取提示词
-                    system_prompt = getattr(prompts_module, system_prompt_key, "")
-                except Exception as import_error:
-                    print(f"无法从Python文件导入提示词: {import_error}")
-                    system_prompt = "你是一个功能强大的通用智能助手，能够处理各种领域的任务和问题。"
-            else:
-                # 使用YAML加载器
-                system_prompt = prompt_loader.get_prompt(prompts_file, system_prompt_key)
-                if not system_prompt:
-                    system_prompt = "你是一个功能强大的通用智能助手，能够处理各种领域的任务和问题。"
-            
-            # 构建完整的提示词模板
-            template = f"""{system_prompt}
+            print(f"加载提示词配置失败: {e}，使用默认提示词")
+            # 使用默认的React提示词
+            from langchain import hub
+            try:
+                prompt = hub.pull("hwchase17/react-chat")
+            except Exception as hub_error:
+                print(f"无法从LangChain Hub获取提示词: {hub_error}")
+                # 最后的回退方案
+                template = """你是一个功能强大的通用智能助手。
 
-            你可以使用以下工具:
-            {{tools}}
+你可以使用以下工具:
+{tools}
 
-            工具名称:
-            {{tool_names}}
+工具名称:
+{tool_names}
 
-            使用以下格式:
-
-            Question: 输入的问题
-            Thought: 你应该思考要做什么
-            Action: 要使用的工具名称
-            Action Input: 工具的输入
-            Observation: 工具的输出
-            ... (这个思考/行动/观察可以重复多次)
-            Thought: 我现在知道最终答案了
-            Final Answer: 对原始问题的最终答案
-
-            开始!
-
-            Question: {{input}}
-            Thought:{{{{agent_scratchpad}}}}"""
-            
-            # 获取工具名称列表
-            tool_names = [tool.name for tool in self.tools]
-            prompt = ChatPromptTemplate.from_template(template)
+Question: {input}
+Thought:{agent_scratchpad}"""
+                prompt = ChatPromptTemplate.from_template(template)
         
         return create_react_agent(self.llm, self.tools, prompt)
     
@@ -200,12 +230,41 @@ class UnifiedAgent:
         Returns:
             智能体执行器实例
         """
+        # 从配置文件读取迭代限制参数
+        unified_config = config_loader.get_specific_agent_config("unified_agent")
+        parameters = unified_config.get("parameters", {})
+        max_iterations = parameters.get("max_iterations", 25)  # 默认25次
+        max_execution_time = parameters.get("max_execution_time", 180)  # 默认3分钟
+        
+        # 创建流式处理器（根据配置选择）
+        callbacks = []
+        verbose_mode = False
+        
+        if self.streaming_style == "detailed":
+            # 详细模式：显示完整的思考过程
+            streaming_handler = StreamingDisplayHandler(verbose=True, show_colors=True)
+            callbacks = [streaming_handler]
+        elif self.streaming_style == "simple":
+            # 简洁模式：显示简化的执行过程
+            streaming_handler = SimpleStreamingHandler()
+            callbacks = [streaming_handler]
+        elif self.streaming_style == "none":
+            # 无流式输出：只显示最终结果
+            verbose_mode = False
+        else:
+            # 默认使用简洁模式
+            streaming_handler = SimpleStreamingHandler()
+            callbacks = [streaming_handler]
+        
         # 创建基础的AgentExecutor
         executor = AgentExecutor(
             agent=self.agent,
             tools=self.tools,
-            verbose=True,
+            verbose=verbose_mode,  # 根据模式决定是否verbose
             handle_parsing_errors=True,
+            max_iterations=max_iterations,  # 从配置文件读取迭代次数
+            max_execution_time=max_execution_time,  # 从配置文件读取执行时间
+            callbacks=callbacks if callbacks else None,  # 添加流式处理器
             agent_kwargs={
                 "tool_names": [tool.name for tool in self.tools]
             }
@@ -213,9 +272,15 @@ class UnifiedAgent:
         
         if self.memory:
             # 使用RunnableWithMessageHistory包装AgentExecutor，实现记忆功能
+            def get_session_history(session_id: str):
+                """获取会话历史，确保返回正确的 memory 对象"""
+                # 对于 ConversationBufferWithSummary，它实现了 BaseChatMessageHistory 接口
+                # 对于 RedisChatMessageHistory，也实现了同样的接口
+                return self.memory
+            
             agent_with_history = RunnableWithMessageHistory(
                 executor,
-                lambda session_id: self.memory,
+                get_session_history,
                 input_messages_key="input",
                 history_messages_key="chat_history",
             )
@@ -630,7 +695,7 @@ class UnifiedAgent:
                 else:
                     # 其他格式，直接输出
                     yield {
-                        "response": f"🔄 步骤: {str(step)}\n",
+                        "response": f"🔄 {str(step)}\n",
                         "metadata": {
                             "query": query,
                             "agent_type": "unified",
@@ -695,6 +760,7 @@ class UnifiedAgent:
         """清除记忆"""
         if self.memory:
             self.memory.clear()
+            print("✅ 对话历史已清除")
     
     def get_memory(self) -> List[BaseMessage]:
         """
@@ -706,6 +772,45 @@ class UnifiedAgent:
         if self.memory:
             return self.memory.messages
         return []
+    
+    def get_summary_history(self) -> List[str]:
+        """
+        获取对话摘要历史
+        
+        Returns:
+            摘要历史列表
+        """
+        if self.memory and hasattr(self.memory, 'get_summary_history'):
+            return self.memory.get_summary_history()
+        return []
+    
+    def get_memory_stats(self) -> Dict[str, Any]:
+        """
+        获取记忆统计信息
+        
+        Returns:
+            记忆统计字典
+        """
+        if not self.memory:
+            return {
+                "enabled": False,
+                "message_count": 0,
+                "summary_count": 0
+            }
+        
+        from langchain_core.messages import HumanMessage as HumanMsg
+        
+        messages = self.memory.messages
+        summaries = self.get_summary_history()
+        
+        return {
+            "enabled": True,
+            "message_count": len(messages),
+            "summary_count": len(summaries),
+            "conversation_rounds": len([m for m in messages if isinstance(m, HumanMsg)]),
+            "memory_type": "redis" if self.redis_url else "in_memory_with_summary",
+            "session_id": self.session_id
+        }
     
     def get_session_info(self) -> Dict[str, Any]:
         """

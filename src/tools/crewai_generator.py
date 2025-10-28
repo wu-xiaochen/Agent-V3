@@ -35,6 +35,7 @@ class AgentRole(str, Enum):
     COORDINATOR = "coordinator"  # 协调员
     EXECUTOR = "executor"  # 执行者
     REVIEWER = "reviewer"  # 审查者
+    CODER = "coder"  # 代码生成/开发工程师
 
 
 class BusinessDomain(str, Enum):
@@ -148,6 +149,12 @@ class CrewAIGenerator:
                     "role": "负责审查流程和结果",
                     "goal": "全面审查流程和结果，确保质量和效率",
                     "backstory": "你是一位严谨的审查专家，具有敏锐的洞察力，能够发现潜在问题并提出改进建议。"
+                },
+                AgentRole.CODER: {
+                    "name": "开发工程师",
+                    "role": "负责代码开发和技术实现",
+                    "goal": "高质量地实现功能需求，编写清晰、高效、可维护的代码",
+                    "backstory": "你是一位技术精湛的开发工程师，精通多种编程语言和开发框架，拥有丰富的项目经验，能够将需求转化为高质量的代码实现。你擅长代码设计、性能优化和问题排查。"
                 }
             },
             BusinessDomain.SUPPLY_CHAIN: {
@@ -501,11 +508,19 @@ class CrewAIGenerator:
     
     def export_to_json(self, crew_config: CrewConfig) -> str:
         """将配置导出为 JSON 字符串"""
-        return crew_config.json(indent=2)
+        # Pydantic v2兼容性：优先使用model_dump_json()，回退到json()
+        if hasattr(crew_config, 'model_dump_json'):
+            return crew_config.model_dump_json(indent=2)
+        else:
+            return crew_config.json(indent=2)
     
     def export_to_dict(self, crew_config: CrewConfig) -> Dict[str, Any]:
         """将配置导出为字典"""
-        return crew_config.dict()
+        # Pydantic v2兼容性：优先使用model_dump()，回退到dict()
+        if hasattr(crew_config, 'model_dump'):
+            return crew_config.model_dump()
+        else:
+            return crew_config.dict()
     
     def save_to_file(self, crew_config: CrewConfig, file_path: str) -> bool:
         """将配置保存到文件"""
@@ -530,13 +545,59 @@ class CrewAIGenerator:
         # 转换智能体配置
         agents = []
         for agent in crew_config.agents:
+            # 根据角色添加合适的工具
+            default_tools = ["search", "calculator", "time"]  # 所有角色的基础工具
+            
+            # 根据角色类型添加特定工具（可以根据角色名称智能判断）
+            agent_tools = list(set(default_tools))  # 去重
+            
+            # 根据角色类型添加专用工具
+            role_lower = agent.role.lower()
+            name_lower = agent.name.lower()
+            
+            # Coder角色：添加代码相关工具
+            if any(keyword in role_lower or keyword in name_lower for keyword in ["coder", "代码", "开发", "程序员", "工程师"]):
+                agent_tools.extend(["search", "calculator", "n8n_mcp_generator"])
+            
+            # 分析类角色：增强搜索能力
+            elif any(keyword in role_lower or keyword in name_lower for keyword in ["分析", "analyst", "研究", "research"]):
+                agent_tools.append("search")
+            
+            # 规划类角色：增强计算和搜索能力
+            elif any(keyword in role_lower or keyword in name_lower for keyword in ["规划", "planner", "设计", "design"]):
+                agent_tools.extend(["search", "calculator"])
+            
+            # 去重并排序
+            agent_tools = sorted(list(set(agent_tools)))
+            
+            # 确定角色类型（用于runtime选择模型）
+            role_type = "default"
+            if any(keyword in role_lower or keyword in name_lower for keyword in ["coder", "代码", "开发", "程序员", "工程师"]):
+                role_type = "coder"
+            elif any(keyword in role_lower or keyword in name_lower for keyword in ["analyst", "分析"]):
+                role_type = "analyst"
+            elif any(keyword in role_lower or keyword in name_lower for keyword in ["planner", "规划", "设计"]):
+                role_type = "planner"
+            elif any(keyword in role_lower or keyword in name_lower for keyword in ["reviewer", "审查", "评审"]):
+                role_type = "reviewer"
+            elif any(keyword in role_lower or keyword in name_lower for keyword in ["coordinator", "协调"]):
+                role_type = "coordinator"
+            elif any(keyword in role_lower or keyword in name_lower for keyword in ["executor", "执行"]):
+                role_type = "executor"
+            
             agent_config = AgentConfig(
                 name=agent.name,
                 role=agent.role,
                 goal=agent.goal,
                 backstory=agent.backstory,
-                tools=[]  # 默认为空，可根据需要添加
+                tools=agent_tools,  # 添加工具列表
+                verbose=True,
+                allow_delegation=False,
+                max_iter=25,
+                max_rpm=1000
             )
+            # 保持AgentConfig对象，不转换成字典
+            # role_type信息可以存储在agents字典中，供runtime使用
             agents.append(agent_config)
         
         # 转换任务配置

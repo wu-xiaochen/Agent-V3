@@ -29,6 +29,16 @@ from .dynamic_tool_loader import DynamicToolLoader
 from .api_tool import APITool
 from .mcp_tool import MCPTool
 
+# 导入N8N工具（完整 API 版本）
+from .n8n_api_tools import (
+    N8NGenerateAndCreateWorkflowTool,
+    N8NCreateWorkflowTool,
+    N8NListWorkflowsTool,
+    N8NExecuteWorkflowTool,
+    N8NDeleteWorkflowTool,
+    create_n8n_api_tools
+)
+
 from src.config.config_loader import config_loader
 
 
@@ -386,7 +396,13 @@ def get_tools(tool_names: Optional[List[str]] = None, config_path: Optional[str]
         "optimization_engine": OptimizationEngineTool,
         "risk_assessment": RiskAssessmentTool,
         "crewai_generator": CrewAIGeneratorTool,
-        "crewai_runtime": CrewAIRuntimeTool
+        "crewai_runtime": CrewAIRuntimeTool,
+        # N8N工具（完整 API 版本）
+        "n8n_generate_and_create_workflow": N8NGenerateAndCreateWorkflowTool,
+        "n8n_create_workflow": N8NCreateWorkflowTool,
+        "n8n_list_workflows": N8NListWorkflowsTool,
+        "n8n_execute_workflow": N8NExecuteWorkflowTool,
+        "n8n_delete_workflow": N8NDeleteWorkflowTool
     }
     
     tools = []
@@ -395,6 +411,27 @@ def get_tools(tool_names: Optional[List[str]] = None, config_path: Optional[str]
             # 实例化工具类
             tool_class = available_tools[tool_name]
             tools.append(tool_class())
+        elif tool_name == "n8n_mcp_generator":
+            # n8n_mcp_generator是一个工具包，包含完整的N8N API工具
+            # 从配置文件读取 API 配置
+            try:
+                import json
+                with open("config/tools/tools_config.json", "r") as f:
+                    tools_config = json.load(f)
+                    for tool_config in tools_config.get("tools", []):
+                        if tool_config.get("name") == "n8n_mcp_generator":
+                            env = tool_config.get("env", {})
+                            api_url = env.get("N8N_API_URL", "http://localhost:5678")
+                            # 替换 host.docker.internal 为 localhost
+                            api_url = api_url.replace("host.docker.internal", "localhost")
+                            api_key = env.get("N8N_API_KEY", "")
+                            n8n_tools = create_n8n_api_tools(api_url=api_url, api_key=api_key)
+                            tools.extend(n8n_tools)
+                            break
+            except Exception as e:
+                print(f"加载n8n API工具失败: {e}")
+                # 使用默认配置
+                tools.extend(create_n8n_api_tools())
     
     return tools
 

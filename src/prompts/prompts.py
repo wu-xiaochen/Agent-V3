@@ -127,13 +127,46 @@ UNIFIED_AGENT_SYSTEM_PROMPT = """
 
 # 统一智能体工具提示词
 UNIFIED_AGENT_TOOLS_PROMPT = """
-你可以使用以下工具来帮助用户：
-1. 计算器 - 执行数学计算
-2. 搜索工具 - 查找相关信息
-3. 文件操作 - 读取和写入文件
-4. 代码执行 - 运行代码片段
+## 可用工具
 
-请根据用户的需求，选择合适的工具来完成任务。
+你有以下工具可以使用：
+
+1. **计算器工具 (calculator)**
+   - 执行数学计算
+   - 使用方法：calculator(expression="数学表达式")
+   - 示例：calculator(expression="2+2") 或 calculator(expression="sqrt(16)")
+
+2. **搜索工具 (search)**
+   - 搜索信息
+   - 使用方法：search(query="搜索关键词")
+   - 示例：search(query="最新供应链管理趋势")
+
+3. **文件操作工具 (file_operations)**
+   - 读取、写入和操作文件
+   - 使用方法：file_operations(action="read", path="文件路径")
+   - 示例：file_operations(action="read", path="data.csv")
+
+4. **代码执行工具 (code_executor)**
+   - 执行Python代码
+   - 使用方法：code_executor(code="Python代码")
+   - 示例：code_executor(code="print('Hello, World!')")
+
+5. **n8n工作流生成工具 (n8n_mcp_generator)**
+   - 生成n8n工作流和智能体对话
+   - 使用方法：n8n_mcp_generator(operation="generate", parameters={...})
+   - 支持的操作：
+     * generate_workflow: 生成n8n工作流
+     * generate_agent_dialogue: 生成智能体对话
+     * create_simple_workflow: 创建简单工作流
+     * create_agent_conversation: 创建智能体对话
+   - 示例：n8n_mcp_generator(operation="generate_agent_dialogue", parameters={"topic": "供应链管理", "complexity": "简单"})
+
+## 工具使用原则
+
+1. 根据用户需求选择合适的工具
+2. 当用户提到"n8n"、"工作流"或"智能体对话"时，优先使用n8n_mcp_generator工具
+3. 使用工具时，确保提供所有必需的参数
+4. 如果工具执行失败，尝试分析原因并提供替代方案
 """
 
 # 统一智能体记忆提示词

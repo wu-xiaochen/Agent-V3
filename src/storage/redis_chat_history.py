@@ -41,19 +41,21 @@ class RedisChatMessageHistory(ChatMessageHistory):
             **kwargs: 其他参数
         """
         super().__init__(**kwargs)
-        self.session_id = session_id
-        self.redis_key = f"{prefix}{session_id}"
+        # 使用 object.__setattr__ 避免 Pydantic 验证错误
+        object.__setattr__(self, 'session_id', session_id)
+        object.__setattr__(self, 'redis_key', f"{prefix}{session_id}")
         
         try:
-            self.redis_client = redis.from_url(redis_url)
+            redis_client = redis.from_url(redis_url)
             # 测试连接
-            self.redis_client.ping()
+            redis_client.ping()
             logger.info(f"成功连接到Redis: {redis_url}")
+            object.__setattr__(self, 'redis_client', redis_client)
         except Exception as e:
             logger.error(f"连接Redis失败: {e}")
             raise ConnectionError(f"无法连接到Redis: {e}")
         
-        self.ttl = ttl
+        object.__setattr__(self, 'ttl', ttl)
         self._load_messages()
     
     def _load_messages(self):

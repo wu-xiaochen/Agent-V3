@@ -42,20 +42,23 @@ agents:
     memory_prompt: "user_guidance"
     parameters:
       temperature: 0.7
-      max_tokens: 2000
-      timeout: 60
+      max_tokens: 4000
+      timeout: 120
+      max_iterations: 25  # 增加最大迭代次数，适应复杂任务
+      max_execution_time: 180  # 增加最大执行时间到3分钟
     tools:
       - "calculator"
       - "search"
-      - "file_operations"
-      - "code_executor"
       - "time"
+      - "crewai_generator"      # 添加CrewAI配置生成工具
+      - "crewai_runtime"        # 添加CrewAI运行时工具
+      - "n8n_mcp_generator"     # n8n工作流生成工具
     memory:
       enabled: true
-      max_conversation_length: 20
-      summary_interval: 10
+      max_conversation_length: 30
+      summary_interval: 15
     workflow:
       enabled: true
-      max_steps: 50
-      planning_iterations: 3
+      max_steps: 100
+      planning_iterations: 5
       reflection_enabled: true

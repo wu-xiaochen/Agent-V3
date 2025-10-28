@@ -46,6 +46,8 @@ Agent-V3 启动脚本
     -c, --config CONFIG      指定配置文件路径
     -e, --env ENV            指定环境 (development, staging, production)
     -d, --debug             启用调试模式
+    --stream                启用流式输出
+    --streaming-style STYLE 流式输出样式 (simple, detailed, none)
     -r, --reload            启用自动重载 (仅开发环境)
     -w, --workers WORKERS   指定工作进程数 (仅服务器模式)
     -s, --server            启动服务器模式
@@ -55,8 +57,9 @@ Agent-V3 启动脚本
     --docker                使用Docker运行
 
 示例:
-    $0 --interactive --provider openai
-    $0 --query "你好" --provider anthropic
+    $0 --interactive --provider openai --stream
+    $0 --query "你好" --provider anthropic --stream --streaming-style simple
+    $0 --interactive --stream --streaming-style detailed
     $0 --server --workers 4
     $0 --test
     $0 --install
@@ -182,6 +185,8 @@ QUERY=""
 CONFIG=""
 ENV="development"
 DEBUG=false
+STREAM=false
+STREAMING_STYLE="simple"
 RELOAD=false
 WORKERS=1
 SERVER=false
@@ -224,6 +229,14 @@ while [[ $# -gt 0 ]]; do
         -d|--debug)
             DEBUG=true
             shift
+            ;;
+        --stream)
+            STREAM=true
+            shift
+            ;;
+        --streaming-style)
+            STREAMING_STYLE="$2"
+            shift 2
             ;;
         -r|--reload)
             RELOAD=true
@@ -325,6 +338,16 @@ fi
 # 添加查询
 if [[ -n "$QUERY" ]]; then
     CMD="$CMD --query \"$QUERY\""
+fi
+
+# 添加流式输出
+if [[ "$STREAM" == true ]]; then
+    CMD="$CMD --stream"
+fi
+
+# 添加流式输出样式
+if [[ -n "$STREAMING_STYLE" ]]; then
+    CMD="$CMD --streaming-style $STREAMING_STYLE"
 fi
 
 # 添加服务器模式

@@ -155,6 +155,6 @@ def setup_debug_filters(debug_mode: bool, debug_config: Dict[str, Any]) -> None:
         for handler in root_logger.handlers:
             handler.addFilter(conversation_filter)
     
-    # 发出警告
-    if not debug_mode and debug_config.get("show_crewai_execution", False):
-        warnings.warn("CrewAI执行过程已启用，但debug模式未开启", UserWarning)
+    # 只在调试模式下发出警告
+    if debug_mode and not debug_config.get("show_crewai_execution", False):
+        warnings.warn("CrewAI执行过程未启用", UserWarning)

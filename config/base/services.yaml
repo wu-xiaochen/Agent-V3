@@ -59,10 +59,66 @@ services:
       default_model: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
       manager_llm: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
       agent_llm: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
+      coder_model: "zai-org/GLM-4.6"  # 专门用于代码生成的模型
       temperature: 0.7
       max_tokens: 1000
       timeout: 30
       retry_count: 3
+      # 不同角色的LLM配置
+      role_models:
+        coder: "zai-org/GLM-4.6"  # 代码生成专用
+        analyst: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"  # 数据分析
+        planner: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"  # 规划
+        reviewer: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"  # 审查
+        default: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"  # 默认模型
+    # CrewAI工具配置
+    tools:
+      enabled: true
+      # 默认工具列表
+      default_tools:
+        - "time"
+        - "search"
+        - "calculator"
+      # 角色特定工具
+      role_tools:
+        coder:
+          - "time"
+          - "search"
+          - "calculator"
+          - "n8n_mcp_generator"  # 代码生成可能需要工作流
+        analyst:
+          - "time"
+          - "search"
+          - "calculator"
+        planner:
+          - "time"
+          - "search"
+          - "calculator"
+        coordinator:
+          - "time"
+          - "search"
+        executor:
+          - "time"
+          - "calculator"
+        reviewer:
+          - "time"
+          - "search"
+      # 可用工具配置
+      available_tools:
+        time:
+          enabled: true
+          description: "获取当前时间"
+        search:
+          enabled: true
+          description: "网络搜索工具"
+          max_results: 10
+        calculator:
+          enabled: true
+          description: "数学计算工具"
+        n8n_mcp_generator:
+          enabled: true
+          description: "n8n工作流生成工具"
+          type: "mcp_stdio"
   
   embedding:
     provider: "huggingface"  # openai, azure, huggingface

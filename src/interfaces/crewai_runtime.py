@@ -243,21 +243,100 @@ class CrewAIRuntime:
             self.logger.info(f"温度参数: {temperature}")
             self.logger.info(f"最大令牌数: {max_tokens}")
             
+            # 获取CrewAI工具配置
+            crewai_tools_config = crewai_config.get('tools', {})
+            tools_enabled = crewai_tools_config.get('enabled', True)
+            default_tools = crewai_tools_config.get('default_tools', ['time', 'search', 'calculator'])
+            role_tools_mapping = crewai_tools_config.get('role_tools', {})
+            
+            # 获取角色模型映射
+            role_models = crewai_llm_config.get('role_models', {})
+            
             # 创建智能体
             self.agents = []
             for agent_config in crew_config["agents"]:
+                # 确定智能体角色类型（用于选择模型和工具）
+                agent_role_type = agent_config.get("role_type", "default")
+                agent_role = agent_config["role"]
+                agent_name = agent_config.get('name', agent_role)
+                
+                # 根据角色类型或名称智能判断角色类型
+                if agent_role_type == "default":
+                    # 智能判断角色类型
+                    role_lower = agent_role.lower()
+                    name_lower = agent_name.lower()
+                    
+                    if any(keyword in role_lower or keyword in name_lower for keyword in ["coder", "代码", "开发", "程序员", "工程师"]):
+                        agent_role_type = "coder"
+                    elif any(keyword in role_lower or keyword in name_lower for keyword in ["analyst", "分析"]):
+                        agent_role_type = "analyst"
+                    elif any(keyword in role_lower or keyword in name_lower for keyword in ["planner", "规划", "设计"]):
+                        agent_role_type = "planner"
+                    elif any(keyword in role_lower or keyword in name_lower for keyword in ["reviewer", "审查", "评审"]):
+                        agent_role_type = "reviewer"
+                    elif any(keyword in role_lower or keyword in name_lower for keyword in ["coordinator", "协调"]):
+                        agent_role_type = "coordinator"
+                    elif any(keyword in role_lower or keyword in name_lower for keyword in ["executor", "执行"]):
+                        agent_role_type = "executor"
+                
+                # 根据角色类型选择模型
+                role_model = role_models.get(agent_role_type, role_models.get('default', model_name))
+                
+                # 如果角色模型与默认模型不同，创建专用LLM
+                if role_model != model_name:
+                    self.logger.info(f"为角色 {agent_role_type} 使用专用模型: {role_model}")
+                    role_llm = LLM(
+                        model=f"openai/{role_model}",
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        api_key=api_key,
+                        base_url=base_url
+                    )
+                    agent_llm = role_llm
+                else:
+                    agent_llm = llm
+                
+                # 获取工具配置
+                # 注意：CrewAI的Agent.tools需要CrewAI工具，不能直接使用LangChain工具
+                agent_tools = []
+                tool_names = []
+                
+                if tools_enabled:
+                    # 优先使用配置中指定的工具
+                    if agent_config.get("tools"):
+                        tool_names = agent_config["tools"]
+                    # 其次使用角色特定工具
+                    elif agent_role_type in role_tools_mapping:
+                        tool_names = role_tools_mapping[agent_role_type]
+                    # 最后使用默认工具
+                    else:
+                        tool_names = default_tools
+                    
+                    if tool_names:
+                        self.logger.info(f"智能体 {agent_name} ({agent_role_type}) 配置了工具: {tool_names}")
+                        
+                        # 创建CrewAI兼容的工具
+                        from src.agents.shared.crewai_tools import create_crewai_tools
+                        try:
+                            agent_tools = create_crewai_tools(tool_names)
+                            self.logger.info(f"已为智能体创建 {len(agent_tools)} 个CrewAI工具")
+                        except Exception as e:
+                            self.logger.error(f"创建CrewAI工具失败: {e}")
+                            agent_tools = []
+                
                 agent = Agent(
-                    role=agent_config["role"],
+                    role=agent_role,
                     goal=agent_config["goal"],
                     backstory=agent_config["backstory"],
                     verbose=agent_config.get("verbose", True),
                     allow_delegation=agent_config.get("allow_delegation", False),
                     max_iter=agent_config.get("max_iter", 25),
                     max_rpm=agent_config.get("max_rpm", 1000),
-                    llm=llm  # 使用硅基流动LLM
+                    llm=agent_llm,  # 使用角色特定的LLM
+                    tools=agent_tools if agent_tools else None  # 传递CrewAI工具
                 )
                 self.agents.append(agent)
-                self.logger.info(f"已创建智能体: {agent_config.get('name', agent_config['role'])} - {agent_config['role']}")
+                self.logger.info(f"已创建智能体: {agent_name} - {agent_role} (类型: {agent_role_type}, 模型: {role_model})")
             
             # 创建任务
             self.tasks = []

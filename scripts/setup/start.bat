@@ -12,6 +12,8 @@ set QUERY=
 set CONFIG=
 set ENV=development
 set DEBUG=false
+set STREAM=false
+set STREAMING_STYLE=simple
 set RELOAD=false
 set WORKERS=1
 set SERVER=false
@@ -105,6 +107,17 @@ if "%~1"=="--debug" (
     shift
     goto parse_args
 )
+if "%~1"=="--stream" (
+    set STREAM=true
+    shift
+    goto parse_args
+)
+if "%~1"=="--streaming-style" (
+    set STREAMING_STYLE=%~2
+    shift
+    shift
+    goto parse_args
+)
 if "%~1"=="-r" (
     set RELOAD=true
     shift
@@ -183,6 +196,8 @@ echo     -q, --query QUERY       执行单次查询
 echo     -c, --config CONFIG      指定配置文件路径
 echo     -e, --env ENV            指定环境 (development, staging, production)
 echo     -d, --debug             启用调试模式
+echo     --stream                启用流式输出
+echo     --streaming-style STYLE 流式输出样式 (simple, detailed, none)
 echo     -r, --reload            启用自动重载 (仅开发环境)
 echo     -w, --workers WORKERS   指定工作进程数 (仅服务器模式)
 echo     -s, --server            启动服务器模式
@@ -192,8 +207,8 @@ echo     --setup                 初始化项目设置
 echo     --docker                使用Docker运行
 echo.
 echo 示例:
-echo     %~nx0 --interactive --provider openai
-echo     %~nx0 --query "你好" --provider anthropic
+echo     %~nx0 --interactive --provider openai --stream
+echo     %~nx0 --query "你好" --provider anthropic --stream --streaming-style simple
 echo     %~nx0 --server --workers 4
 echo     %~nx0 --test
 echo     %~nx0 --install
@@ -376,6 +391,16 @@ if "%INTERACTIVE%"=="true" (
 REM 添加查询
 if not "%QUERY%"=="" (
     set CMD=%CMD% --query "%QUERY%"
+)
+
+REM 添加流式输出
+if "%STREAM%"=="true" (
+    set CMD=%CMD% --stream
+)
+
+REM 添加流式输出样式
+if not "%STREAMING_STYLE%"=="" (
+    set CMD=%CMD% --streaming-style %STREAMING_STYLE%
 )
 
 REM 添加服务器模式

@@ -16,6 +16,7 @@ from .tool_config_models import (
     BuiltinToolConfig, 
     APIToolConfig, 
     MCPToolConfig,
+    MCPStdioToolConfig,
     AuthType
 )
 
@@ -59,7 +60,7 @@ class BaseToolFactory(ABC):
     """工具工厂基类"""
     
     @abstractmethod
-    def create_tool(self, config: Union[BuiltinToolConfig, APIToolConfig, MCPToolConfig]) -> BaseTool:
+    def create_tool(self, config: Union[BuiltinToolConfig, APIToolConfig, MCPToolConfig, MCPStdioToolConfig]) -> BaseTool:
         """创建工具实例"""
         pass
 
@@ -92,7 +93,13 @@ class APIToolFactory(BaseToolFactory):
         from .api_tool import APITool
         
         # 解析配置中的环境变量
-        resolved_config = EnvironmentVariableResolver.resolve(config.dict())
+        # Pydantic v2兼容性
+        if hasattr(config, 'model_dump'):
+            config_dict = config.model_dump()
+        else:
+            config_dict = config.dict()
+        
+        resolved_config = EnvironmentVariableResolver.resolve(config_dict)
         
         # 创建API工具实例
         return APITool.from_config(resolved_config)
@@ -107,7 +114,13 @@ class MCPToolFactory(BaseToolFactory):
         from .mcp_tool import MCPTool
         
         # 解析配置中的环境变量
-        resolved_config = EnvironmentVariableResolver.resolve(config.dict())
+        # Pydantic v2兼容性
+        if hasattr(config, 'model_dump'):
+            config_dict = config.model_dump()
+        else:
+            config_dict = config.dict()
+        
+        resolved_config = EnvironmentVariableResolver.resolve(config_dict)
         
         # 创建MCP工具实例
         return MCPTool.from_config(resolved_config)
@@ -120,10 +133,17 @@ class DynamicToolLoader:
         self._factories: Dict[ToolType, BaseToolFactory] = {
             ToolType.BUILTIN: BuiltinToolFactory(),
             ToolType.API: APIToolFactory(),
-            ToolType.MCP: MCPToolFactory()
+            ToolType.MCP: MCPToolFactory(),
+            # MCPStdioToolFactory将在稍后注册，以避免循环导入
         }
         self._config_cache: Dict[str, ToolsConfiguration] = {}
         self._default_config_path = config_path
+    
+    def _register_mcp_stdio_factory(self):
+        """注册MCPStdioToolFactory（延迟注册以避免循环导入）"""
+        if ToolType.MCP_STDIO not in self._factories:
+            from .mcp_stdio_tool_factory import MCPStdioToolFactory
+            self._factories[ToolType.MCP_STDIO] = MCPStdioToolFactory()
     
     def load_config_from_file(self, config_path: str) -> ToolsConfiguration:
         """从文件加载工具配置"""
@@ -176,8 +196,12 @@ class DynamicToolLoader:
         
         return tools
     
-    def create_tool(self, config: Union[BuiltinToolConfig, APIToolConfig, MCPToolConfig]) -> "BaseTool":
+    def create_tool(self, config: Union[BuiltinToolConfig, APIToolConfig, MCPToolConfig, MCPStdioToolConfig]) -> "BaseTool":
         """创建单个工具实例"""
+        # 如果是MCPStdioToolConfig，确保工厂已注册
+        if hasattr(config, 'type') and config.type == ToolType.MCP_STDIO:
+            self._register_mcp_stdio_factory()
+        
         factory = self._factories.get(config.type)
         if not factory:
             raise ToolLoaderError(f"No factory for tool type: {config.type}")
@@ -186,6 +210,8 @@ class DynamicToolLoader:
     
     def get_available_tool_types(self) -> List[ToolType]:
         """获取支持的工具类型"""
+        # 确保MCPStdioToolFactory已注册
+        self._register_mcp_stdio_factory()
         return list(self._factories.keys())
     
     def register_factory(self, tool_type: ToolType, factory: BaseToolFactory):

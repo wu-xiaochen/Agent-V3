@@ -33,9 +33,13 @@ def setup_logging(debug_mode=False):
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     warnings.filterwarnings("ignore", message="Please see the migration guide at")
     
-    # 非调试模式下，过滤LangSmith警告
+    # 非调试模式下，过滤各种警告
     if not debug_mode:
         warnings.filterwarnings("ignore", category=UserWarning, message=".*API key must be provided when hosted LangSmith API.*")
+        warnings.filterwarnings("ignore", category=UserWarning, message=".*CrewAI执行过程.*")
+        # 过滤LangChain参数警告
+        warnings.filterwarnings("ignore", message=".*is not default parameter.*")
+        warnings.filterwarnings("ignore", message=".*was transferred to model_kwargs.*")
     
     logging_config = config_loader.get_logging_config()
     # 在debug模式下，将日志级别设置为DEBUG
@@ -66,6 +70,14 @@ def setup_logging(debug_mode=False):
     # 设置调试过滤器
     from src.shared.debug_filter import setup_debug_filters
     setup_debug_filters(debug_mode, debug_config)
+    
+    # 非调试模式下，提高第三方库的日志级别，只显示ERROR及以上
+    if not debug_mode:
+        logging.getLogger("langchain_community").setLevel(logging.ERROR)
+        logging.getLogger("openai").setLevel(logging.ERROR)
+        logging.getLogger("httpx").setLevel(logging.ERROR)
+        logging.getLogger("httpcore").setLevel(logging.ERROR)
+        logging.getLogger("langsmith").setLevel(logging.ERROR)
 
 
 def interactive_mode(agent: UnifiedAgent, stream: bool = False):
@@ -74,6 +86,8 @@ def interactive_mode(agent: UnifiedAgent, stream: bool = False):
     print("输入 'quit' 或 'exit' 退出")
     print("输入 'clear' 清除对话历史")
     print("输入 'memory' 查看对话历史")
+    print("输入 'stats' 查看记忆统计")
+    print("输入 'summary' 查看对话摘要")
     print("=" * 40)
     
     while True:
@@ -93,28 +107,43 @@ def interactive_mode(agent: UnifiedAgent, stream: bool = False):
                     print("\n=== 对话历史 ===")
                     for i, msg in enumerate(memory):
                         msg_type = "用户" if msg.type == "human" else "助手"
-                        print(f"{msg_type}: {msg.content}")
+                        content = msg.content[:100] + "..." if len(msg.content) > 100 else msg.content
+                        print(f"{msg_type}: {content}")
                     print("=" * 40)
                 else:
                     print("暂无对话历史")
                 continue
-            
-            print("\n助手: ", end="", flush=True)
-            if stream:
-                # 流式输出
-                for chunk in agent.stream(user_input):
-                    if isinstance(chunk, dict) and "response" in chunk:
-                        print(chunk["response"], end="", flush=True)
-                    else:
-                        print(chunk, end="", flush=True)
-                print()  # 换行
-            else:
-                # 非流式输出
-                response = agent.run(user_input)
-                if isinstance(response, dict) and "response" in response:
-                    print(response["response"])
+            elif user_input.lower() == 'stats':
+                stats = agent.get_memory_stats()
+                print("\n=== 记忆统计 ===")
+                print(f"记忆状态: {'启用' if stats['enabled'] else '未启用'}")
+                print(f"消息数量: {stats['message_count']}")
+                print(f"对话轮数: {stats.get('conversation_rounds', 0)}")
+                print(f"摘要数量: {stats['summary_count']}")
+                print(f"存储类型: {stats.get('memory_type', 'unknown')}")
+                print(f"会话ID: {stats.get('session_id', 'unknown')}")
+                print("=" * 40)
+                continue
+            elif user_input.lower() == 'summary':
+                summaries = agent.get_summary_history()
+                if summaries:
+                    print("\n=== 对话摘要历史 ===")
+                    for i, summary in enumerate(summaries, 1):
+                        print(f"\n摘要 {i}:")
+                        print(summary)
+                    print("\n" + "=" * 40)
                 else:
-                    print(response)
+                    print("暂无对话摘要（对话轮数较少，未触发自动摘要）")
+                continue
+            
+            # 注意：streaming_style 参数已经在创建agent时设置了callbacks
+            # 这些callbacks会在run()方法执行时自动触发，提供实时输出
+            # 所以这里统一使用run()方法，不需要区分stream参数
+            response = agent.run(user_input)
+            if isinstance(response, dict) and "response" in response:
+                print(f"\n助手: {response['response']}")
+            else:
+                print(f"\n助手: {response}")
             
         except KeyboardInterrupt:
             print("\n\n程序被中断，再见!")
@@ -130,21 +159,13 @@ def interactive_mode(agent: UnifiedAgent, stream: bool = False):
 def single_query_mode(agent: UnifiedAgent, query: str, stream: bool = False):
     """单次查询模式"""
     try:
-        if stream:
-            # 流式输出
-            for chunk in agent.stream(query):
-                if isinstance(chunk, dict) and "response" in chunk:
-                    print(chunk["response"], end="", flush=True)
-                else:
-                    print(chunk, end="", flush=True)
-            print()  # 换行
+        # 注意：streaming_style 参数已经在创建agent时设置了callbacks
+        # 这些callbacks会在run()方法执行时自动触发，提供实时输出
+        response = agent.run(query)
+        if isinstance(response, dict) and "response" in response:
+            print(f"\n{response['response']}")
         else:
-            # 非流式输出
-            response = agent.run(query)
-            if isinstance(response, dict) and "response" in response:
-                print(response["response"])
-            else:
-                print(response)
+            print(f"\n{response}")
     except Exception as e:
         print(f"错误: {str(e)}")
 
@@ -156,6 +177,8 @@ def main():
     parser.add_argument("--query", type=str, help="单次查询模式")
     parser.add_argument("--interactive", action="store_true", help="交互模式")
     parser.add_argument("--stream", "-s", action="store_true", help="启用流式输出")
+    parser.add_argument("--streaming-style", choices=["simple", "detailed", "none"], default="simple", 
+                       help="流式输出样式: simple=简洁美观, detailed=详细完整, none=只显示结果")
     parser.add_argument("--config", type=str, help="配置文件路径")
     parser.add_argument("--debug", action="store_true", help="调试模式，显示详细日志")
     parser.add_argument("--no-debug", action="store_true", help="关闭调试模式，仅显示对话信息")
@@ -173,8 +196,11 @@ def main():
     setup_logging(debug_mode)
     
     try:
-        # 创建智能体
-        agent = UnifiedAgent(provider=args.provider)
+        # 创建智能体（传入streaming_style参数）
+        agent = UnifiedAgent(
+            provider=args.provider,
+            streaming_style=args.streaming_style
+        )
         
         if args.query:
             # 单次查询模式
