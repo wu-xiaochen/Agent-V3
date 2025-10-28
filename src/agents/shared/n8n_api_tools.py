@@ -122,27 +122,26 @@ class N8NAPIClient:
 
 
 class N8NCreateWorkflowTool(BaseTool):
-    """N8N 创建工作流工具 - 直接在 n8n 实例上创建"""
+    """N8N 创建工作流工具（高级，需要完整 JSON）"""
     
     name: str = "n8n_create_workflow"
-    description: str = """直接在 n8n 实例上创建工作流。
-    
-输入参数:
-- name: 工作流名称 (必需)
-- nodes: 节点列表 (必需)
-- connections: 节点连接关系 (必需)
-- active: 是否激活 (可选, 默认 false)
-- settings: 工作流设置 (可选)
+    description: str = """使用完整 JSON 配置创建 n8n 工作流（高级功能，慎用）。
 
-返回: 创建的工作流信息，包括 ID、名称、创建时间等
+⚠️ 重要警告:
+- 此工具需要严格有效的 JSON 格式
+- 不推荐在对话中使用（LLM 很难生成正确的 JSON）
+- 推荐使用: n8n_generate_and_create_workflow 代替
 
-示例输入 (JSON):
-{
-  "name": "我的工作流",
-  "nodes": [...],
-  "connections": {...},
-  "active": false
-}
+仅在以下情况使用:
+- 你有完整的、经过验证的 n8n 工作流 JSON
+- 从现有工作流导出并复制配置
+
+否则强烈建议使用: n8n_generate_and_create_workflow
+
+输入要求:
+- workflow_json: 必须是完整、有效的 JSON 字符串
+- 所有字符串必须正确闭合
+- 必须包含 "name" 和 "nodes" 字段
 """
     
     api_url: str = Field(default="")
@@ -235,16 +234,27 @@ class N8NGenerateAndCreateWorkflowTool(BaseTool):
     """N8N 智能生成并创建工作流工具 - AI 描述转工作流"""
     
     name: str = "n8n_generate_and_create_workflow"
-    description: str = """根据描述智能生成工作流并直接创建到 n8n 实例。
-    
-输入: 工作流描述（中文或英文）
+    description: str = """根据简短描述自动生成并创建 n8n 工作流。
 
-示例:
-- "创建一个定时任务，每小时发送邮件提醒"
-- "创建一个 webhook 接收器，处理数据后发送到 Slack"
-- "创建一个简单的 HTTP 请求工作流"
+重要: 
+- 只需提供简短的工作流描述（1-2句话）
+- 不要提供 JSON 或复杂的配置
+- 工具会自动生成合适的工作流
 
-返回: 生成的工作流配置和创建结果
+输入格式: 简短的文本描述
+
+正确示例:
+- "每小时检查库存"
+- "接收订单请求"
+- "定时发送报告"
+- "自动化采购流程"
+
+错误示例（不要这样做）:
+- 不要提供 JSON 配置
+- 不要提供详细的节点配置
+- 不要提供复杂的步骤说明
+
+返回: 创建结果，包含工作流 ID 和访问链接
 """
     
     api_url: str = Field(default="")
