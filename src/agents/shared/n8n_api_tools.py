@@ -165,7 +165,25 @@ class N8NCreateWorkflowTool(BaseTool):
         try:
             # 解析输入
             if workflow_json:
-                workflow = json.loads(workflow_json)
+                # 尝试清理和修复 JSON
+                try:
+                    workflow = json.loads(workflow_json)
+                except json.JSONDecodeError as e:
+                    self.logger.warning(f"JSON 解析失败，尝试修复: {e}")
+                    # 尝试修复常见的 JSON 问题
+                    cleaned_json = workflow_json.strip()
+                    # 移除可能的 markdown 代码块标记
+                    if cleaned_json.startswith('```'):
+                        lines = cleaned_json.split('\n')
+                        cleaned_json = '\n'.join(lines[1:-1] if lines[-1].strip() == '```' else lines[1:])
+                    # 再次尝试解析
+                    try:
+                        workflow = json.loads(cleaned_json)
+                    except json.JSONDecodeError:
+                        return json.dumps({
+                            "success": False,
+                            "error": f"无效的 JSON 格式: {str(e)}。请检查 JSON 语法，特别是字符串是否正确闭合。"
+                        }, ensure_ascii=False)
             else:
                 workflow = kwargs
             
@@ -245,116 +263,89 @@ class N8NGenerateAndCreateWorkflowTool(BaseTool):
         object.__setattr__(self, 'logger', logging.getLogger(__name__))
     
     def _generate_workflow(self, description: str) -> Dict[str, Any]:
-        """根据描述生成工作流"""
+        """根据描述生成简单的工作流"""
+        self.logger.info(f"生成简化工作流: {description[:100]}...")
+        
         description_lower = description.lower()
         
         nodes = []
         connections = {}
         
-        # 1. 确定触发器
+        # 1. 确定触发器（简化版本）
+        trigger_node = None
         if "webhook" in description_lower or "接收" in description:
-            nodes.append({
+            trigger_node = {
                 "parameters": {
                     "path": "webhook",
-                    "responseMode": "onReceived",
-                    "options": {}
+                    "responseMode": "onReceived"
                 },
-                "name": "Webhook",
+                "name": "When_webhook_called",
                 "type": "n8n-nodes-base.webhook",
                 "typeVersion": 1,
-                "position": [250, 300],
-                "webhookId": ""
-            })
-        elif "定时" in description or "schedule" in description_lower or "每" in description:
-            nodes.append({
+                "position": [250, 300]
+            }
+        elif "定时" in description or "schedule" in description_lower or "每" in description or "hour" in description_lower:
+            trigger_node = {
                 "parameters": {
                     "rule": {
                         "interval": [{"field": "hours", "hoursInterval": 1}]
                     }
                 },
-                "name": "Schedule Trigger",
+                "name": "Schedule",
                 "type": "n8n-nodes-base.scheduleTrigger",
                 "typeVersion": 1,
                 "position": [250, 300]
-            })
+            }
         else:
-            nodes.append({
+            trigger_node = {
                 "parameters": {},
-                "name": "Manual Trigger",
+                "name": "Start",
                 "type": "n8n-nodes-base.manualTrigger",
                 "typeVersion": 1,
                 "position": [250, 300]
-            })
-        
-        # 2. 添加功能节点
-        if "http" in description_lower or "请求" in description or "api" in description_lower:
-            prev_node = nodes[-1]["name"]
-            nodes.append({
-                "parameters": {
-                    "url": "https://api.example.com/endpoint",
-                    "options": {}
-                },
-                "name": "HTTP Request",
-                "type": "n8n-nodes-base.httpRequest",
-                "typeVersion": 4.1,
-                "position": [450, 300]
-            })
-            connections[prev_node] = {
-                "main": [[{"node": "HTTP Request", "type": "main", "index": 0}]]
             }
         
-        if "slack" in description_lower or "消息" in description or "通知" in description:
-            prev_node = nodes[-1]["name"]
-            nodes.append({
-                "parameters": {
-                    "channel": "#general",
-                    "text": "=Hello from n8n!",
-                    "options": {}
-                },
-                "name": "Slack",
-                "type": "n8n-nodes-base.slack",
-                "typeVersion": 2.1,
-                "position": [650, 300]
-            })
-            connections[prev_node] = {
-                "main": [[{"node": "Slack", "type": "main", "index": 0}]]
-            }
+        nodes.append(trigger_node)
         
-        if "邮件" in description or "email" in description_lower:
-            prev_node = nodes[-1]["name"]
-            nodes.append({
-                "parameters": {
-                    "fromEmail": "noreply@example.com",
-                    "toEmail": "user@example.com",
-                    "subject": "Notification",
-                    "text": "This is a notification from n8n"
-                },
-                "name": "Send Email",
-                "type": "n8n-nodes-base.emailSend",
-                "typeVersion": 2,
-                "position": [650, 300]
-            })
-            connections[prev_node] = {
-                "main": [[{"node": "Send Email", "type": "main", "index": 0}]]
-            }
+        # 2. 添加一个简单的处理节点
+        prev_node_name = nodes[0]["name"]
         
-        # 如果只有触发器，添加一个 Set 节点
-        if len(nodes) == 1:
+        # 根据描述添加适当的节点
+        if "采购" in description or "purchase" in description_lower or "order" in description_lower:
+            # 采购流程工作流
             nodes.append({
                 "parameters": {
                     "values": {
-                        "string": [{"name": "message", "value": "Hello from n8n!"}]
-                    },
-                    "options": {}
+                        "string": [
+                            {"name": "requestId", "value": "PR-001"},
+                            {"name": "status", "value": "pending"},
+                            {"name": "message", "value": "Purchase request created"}
+                        ]
+                    }
                 },
-                "name": "Set",
+                "name": "SetData",
                 "type": "n8n-nodes-base.set",
-                "typeVersion": 3.2,
+                "typeVersion": 3,
                 "position": [450, 300]
             })
-            connections[nodes[0]["name"]] = {
-                "main": [[{"node": "Set", "type": "main", "index": 0}]]
-            }
+        else:
+            # 默认：简单的数据设置节点
+            nodes.append({
+                "parameters": {
+                    "values": {
+                        "string": [{"name": "result", "value": "Workflow executed successfully"}]
+                    }
+                },
+                "name": "SetData",
+                "type": "n8n-nodes-base.set",
+                "typeVersion": 3,
+                "position": [450, 300]
+            })
+        
+        # 连接节点
+        connections[prev_node_name] = {
+            "main": [[{"node": "SetData", "type": "main", "index": 0}]]
+        }
         
         return {
             "name": description[:50],
