@@ -252,6 +252,13 @@ class CrewAIRuntime:
             # 获取角色模型映射
             role_models = crewai_llm_config.get('role_models', {})
             
+            # 获取当前时间信息（用于注入到agent的上下文）
+            current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            current_date = datetime.now().strftime("%Y年%m月%d日")
+            current_year = datetime.now().year
+            
+            time_context = f"\n\n【重要时间信息】\n当前时间: {current_datetime} (北京时间 UTC+8)\n当前年份: {current_year}\n今天日期: {current_date}\n\n在执行任务时，请注意使用当前时间信息，特别是在分析趋势、新闻、市场状况等时效性信息时。"
+            
             # 创建智能体
             self.agents = []
             for agent_config in crew_config["agents"]:
@@ -324,10 +331,13 @@ class CrewAIRuntime:
                             self.logger.error(f"创建CrewAI工具失败: {e}")
                             agent_tools = []
                 
+                # 将时间信息注入到backstory中
+                backstory_with_time = agent_config["backstory"] + time_context
+                
                 agent = Agent(
                     role=agent_role,
                     goal=agent_config["goal"],
-                    backstory=agent_config["backstory"],
+                    backstory=backstory_with_time,  # 注入时间信息
                     verbose=agent_config.get("verbose", True),
                     allow_delegation=agent_config.get("allow_delegation", False),
                     max_iter=agent_config.get("max_iter", 25),

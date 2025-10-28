@@ -172,16 +172,29 @@ class UnifiedAgent:
 
 {agent_scratchpad}"""
             
+            # 获取当前时间信息
+            from datetime import datetime
+            current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            current_date = datetime.now().strftime("%Y年%m月%d日")
+            current_year = datetime.now().year
+            
             # 构建完整的React提示词模板 - 使用标准英文格式避免解析问题，包含对话历史
-            template = """Answer the following questions as best you can. You have access to the following tools:
+            template = f"""Current Date and Time: {current_datetime} (Beijing Time, UTC+8)
+Current Year: {current_year}
+Today is: {current_date}
 
-{tools}
+IMPORTANT: When analyzing trends, news, market conditions, or any time-sensitive information, 
+always consider the current date above. Use the 'time' tool if you need to verify the current time.
+
+Answer the following questions as best you can. You have access to the following tools:
+
+{{tools}}
 
 Use the following format:
 
 Question: the input question you must answer
 Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
+Action: the action to take, should be one of [{{tool_names}}]
 Action Input: the input to the action
 Observation: the result of the action
 ... (this Thought/Action/Action Input/Observation can repeat N times)
@@ -191,10 +204,10 @@ Final Answer: the final answer to the original input question
 Begin!
 
 Previous conversation history:
-{chat_history}
+{{chat_history}}
 
-New question: {input}
-Thought:{agent_scratchpad}"""
+New question: {{input}}
+Thought:{{agent_scratchpad}}"""
             
             prompt = ChatPromptTemplate.from_messages([
                 ("system", template)
