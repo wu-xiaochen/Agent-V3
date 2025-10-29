@@ -7,6 +7,7 @@ CrewAI 配置生成工具
 
 import json
 import yaml
+import logging
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 from enum import Enum
@@ -26,6 +27,9 @@ from src.interfaces.crewai_config_template import (
     TaskConfig, 
     CrewAIConfig
 )
+
+# 创建logger实例
+logger = logging.getLogger(__name__)
 
 
 class AgentRole(str, Enum):
@@ -671,6 +675,8 @@ class CrewAIGeneratorTool(BaseTool):
     name: str = "crewai_generator"
     description: str = "根据业务需求生成CrewAI团队配置，支持多业务领域的专业团队创建"
     generator: CrewAIGenerator = Field(default_factory=CrewAIGenerator)
+    auto_save: bool = Field(default=True, description="是否自动保存配置到文件")
+    save_dir: str = Field(default="config/generated", description="配置保存目录")
     
     def _run(self, business_process: str, **kwargs) -> Dict[str, Any]:
         """
@@ -686,6 +692,7 @@ class CrewAIGeneratorTool(BaseTool):
         crew_name = kwargs.get("crew_name", "专业团队")
         process_type = kwargs.get("process_type", "sequential")
         output_file = kwargs.get("output_file", None)
+        auto_save = kwargs.get("auto_save", self.auto_save)
         
         crew_config = self.generator.generate_crew_config(
             business_process=business_process,
@@ -700,11 +707,67 @@ class CrewAIGeneratorTool(BaseTool):
         
         config_dict = standard_config.to_dict()
         
-        if output_file:
-            self.generator.save_to_file(crew_config, output_file)
-            config_dict["output_file"] = output_file
+        # ✅ 自动保存配置（如果启用）
+        if auto_save or output_file:
+            saved_path = self._auto_save_config(config_dict, crew_name, output_file)
+            config_dict["saved_config_path"] = saved_path
+            config_dict["config_id"] = self._generate_config_id(crew_name)
+            logger.info(f"✅ CrewAI配置已保存: {saved_path} (ID: {config_dict['config_id']})")
         
         return config_dict
+    
+    def _auto_save_config(self, config_dict: Dict[str, Any], crew_name: str, output_file: Optional[str] = None) -> str:
+        """
+        自动保存配置到文件
+        
+        Args:
+            config_dict: 配置字典
+            crew_name: 团队名称
+            output_file: 指定的输出文件路径（可选）
+            
+        Returns:
+            str: 保存的文件路径
+        """
+        import os
+        from datetime import datetime
+        from pathlib import Path
+        
+        # 确保保存目录存在
+        save_dir = Path(self.save_dir)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 生成文件名
+        if output_file:
+            file_path = Path(output_file)
+        else:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_name = crew_name.replace(" ", "_").replace("/", "_")
+            file_path = save_dir / f"{safe_name}_{timestamp}.json"
+        
+        # 保存配置
+        import json
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(config_dict, f, ensure_ascii=False, indent=2)
+        
+        return str(file_path)
+    
+    def _generate_config_id(self, crew_name: str) -> str:
+        """
+        生成配置ID
+        
+        Args:
+            crew_name: 团队名称
+            
+        Returns:
+            str: 配置ID
+        """
+        import hashlib
+        from datetime import datetime
+        
+        # 使用时间戳和团队名称生成唯一ID
+        timestamp = datetime.now().isoformat()
+        id_string = f"{crew_name}_{timestamp}"
+        return hashlib.md5(id_string.encode()).hexdigest()[:12]
     
     async def _arun(self, business_process: str, **kwargs) -> Dict[str, Any]:
         """异步运行CrewAI配置生成工具"""

@@ -1,0 +1,40 @@
+{
+  "business_process": "{\n  \"business_scenario\": \"分析2025年最新AI技术和发展趋势\",\n  \"team_requirements\": \"需要一个专业团队来分析当前AI领域的最新技术突破、市场趋势、主要玩家和发展方向。团队应该包括技术专家、市场分析师和趋势预测专家。\"\n}",
+  "crewai_config": {
+    "name": "专业团队",
+    "description": "基于业务需求 '{\n  \"business_scenario\": \"分析2025年最新AI技术和发展趋势\",\n  \"team_requirements\": \"需要一个专业团队来分析当前AI领域的最新技术突破、市场趋势、主要玩家和发展方向。团队应该包括技术专家、市场分析师和趋势预测专家。\"\n}' 生成的专业团队",
+    "agents": [
+      {
+        "name": "技术分析师_analyst",
+        "role": "负责分析技术趋势和数据",
+        "goal": "深入分析技术趋势和数据，识别技术机会和风险",
+        "backstory": "你是一位专业的技术分析师，精通各种技术评估方法，能够准确评估技术的可行性和潜在价值。",
+        "tools": [
+          "calculator",
+          "search",
+          "time"
+        ],
+        "verbose": true,
+        "allow_delegation": false,
+        "max_iter": 25,
+        "max_rpm": 1000
+      }
+    ],
+    "tasks": [
+      {
+        "name": "技术分析_1",
+        "description": "分析当前技术状况，识别技术问题和机会",
+        "agent": "技术分析师_analyst",
+        "expected_output": "详细的技术分析报告，包括现状、问题和机会",
+        "context": [],
+        "tools": []
+      }
+    ],
+    "process": "sequential",
+    "manager_role": null,
+    "verbose": true,
+    "memory": true
+  },
+  "generated_at": "2025-10-29T11:28:26.232114",
+  "version": "1.0"
+}

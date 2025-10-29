@@ -38,6 +38,7 @@ from .n8n_api_tools import (
     N8NDeleteWorkflowTool,
     create_n8n_api_tools
 )
+from .n8n_mcp_client import N8NMCPClient, create_n8n_mcp_client
 
 from src.config.config_loader import config_loader
 
@@ -412,32 +413,27 @@ def get_tools(tool_names: Optional[List[str]] = None, config_path: Optional[str]
             tool_class = available_tools[tool_name]
             tools.append(tool_class())
         elif tool_name == "n8n_mcp_generator":
-            # n8n_mcp_generator是一个工具包，包含完整的N8N API工具
-            # 从配置文件读取 API 配置
+            # ✅ 使用真正的 N8N MCP 客户端
+            # 通过 docker exec 调用运行中的 n8n-mcp 容器
             try:
-                import json
-                with open("config/tools/tools_config.json", "r") as f:
-                    tools_config = json.load(f)
-                    for tool_config in tools_config.get("tools", []):
-                        if tool_config.get("name") == "n8n_mcp_generator":
-                            # 🆕 使用 EnvManager 获取配置
-                            from src.config.env_manager import EnvManager
-                            n8n_config = EnvManager.get_n8n_config()
-                            n8n_tools = create_n8n_api_tools(
-                                api_url=n8n_config["api_url"],
-                                api_key=n8n_config["api_key"]
-                            )
-                            tools.extend(n8n_tools)
-                            break
+                n8n_mcp_client = create_n8n_mcp_client(container_name="n8n-mcp-server", timeout=120)
+                tools.append(n8n_mcp_client)
+                print("✅ 加载 N8N MCP 工具成功（使用 n8n-mcp Docker 容器）")
             except Exception as e:
-                print(f"加载n8n API工具失败: {e}")
-                # 🆕 使用 EnvManager 的默认配置
-                from src.config.env_manager import EnvManager
-                n8n_config = EnvManager.get_n8n_config()
-                tools.extend(create_n8n_api_tools(
-                    api_url=n8n_config["api_url"],
-                    api_key=n8n_config["api_key"]
-                ))
+                print(f"⚠️ 加载 N8N MCP 工具失败: {e}")
+                print("   回退到使用 N8N API 工具...")
+                # Fallback: 使用 API 工具
+                try:
+                    from src.config.env_manager import EnvManager
+                    n8n_config = EnvManager.get_n8n_config()
+                    n8n_tools = create_n8n_api_tools(
+                        api_url=n8n_config["api_url"],
+                        api_key=n8n_config["api_key"]
+                    )
+                    tools.extend(n8n_tools)
+                    print("✅ 已加载 N8N API 工具（Fallback）")
+                except Exception as fallback_e:
+                    print(f"❌ Fallback 也失败: {fallback_e}")
     
     return tools
 

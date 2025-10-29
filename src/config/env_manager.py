@@ -162,20 +162,40 @@ class EnvManager:
                         # 查找 n8n_mcp_generator 工具的配置
                         for tool in tools_config.get("tools", []):
                             if tool.get("name") == "n8n_mcp_generator":
+                                # 从 env 字段读取
                                 env_config = tool.get("env", {})
                                 api_key = env_config.get("N8N_API_KEY", "")
                                 if not api_url or api_url == "http://localhost:5678":
                                     api_url = env_config.get("N8N_API_URL", api_url)
+                                
+                                # 如果 env 为空，尝试从 args 中提取（docker run -e 格式）
+                                if not api_key:
+                                    args = tool.get("args", [])
+                                    for i, arg in enumerate(args):
+                                        if arg == "-e" and i + 1 < len(args):
+                                            env_pair = args[i + 1]
+                                            if env_pair.startswith("N8N_API_KEY="):
+                                                api_key = env_pair.split("=", 1)[1]
+                                            elif env_pair.startswith("N8N_API_URL="):
+                                                api_url = env_pair.split("=", 1)[1]
                                 break
             except Exception as e:
                 logger.debug(f"从配置文件读取 n8n 配置失败: {e}")
         
-        # 确保在非Docker环境下，host.docker.internal被替换为localhost
-        if "host.docker.internal" in api_url and not os.getenv("DOCKER_ENV"):
-            api_url = api_url.replace("host.docker.internal", "localhost")
+        # 🔧 API URL 转换逻辑：
+        # - Agent 本地运行访问 n8n API：使用 localhost
+        # - 但保留原始 URL 供参考（工作流内部可能需要 host.docker.internal）
+        # 
+        # 注意：如果 n8n 在 Docker 中运行，从本地访问应该用 localhost
+        # 但如果是给 Docker 内的应用访问本地服务，应该用 host.docker.internal
+        if "host.docker.internal" in api_url:
+            # 本地 Agent 访问 n8n 时，转换为 localhost
+            api_url_local = api_url.replace("host.docker.internal", "localhost")
+        else:
+            api_url_local = api_url
         
         return {
-            "api_url": api_url,
+            "api_url": api_url_local,  # 用于访问 n8n API
             "api_key": api_key
         }
     

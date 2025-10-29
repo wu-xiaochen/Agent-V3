@@ -107,13 +107,28 @@ class MCPStdioTool(BaseTool):
             self._process.stdin.write(request_json)
             self._process.stdin.flush()
             
-            # 读取响应
-            response_line = self._process.stdout.readline()
-            if not response_line:
-                raise Exception("No response from MCP server")
+            # 读取响应，跳过非 JSON 行（日志输出）
+            max_attempts = 100  # 最多尝试读取 100 行
+            for _ in range(max_attempts):
+                response_line = self._process.stdout.readline()
+                if not response_line:
+                    raise Exception("No response from MCP server")
+                
+                line = response_line.strip()
+                if not line:
+                    continue
+                
+                # 尝试解析 JSON
+                try:
+                    response = json.loads(line)
+                    # 验证是否是有效的 JSON-RPC 响应
+                    if isinstance(response, dict) and ('result' in response or 'error' in response or 'method' in response):
+                        return response
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    # 这是日志行，继续读取下一行
+                    continue
             
-            response = json.loads(response_line.strip())
-            return response
+            raise Exception("Failed to find valid JSON-RPC response after reading multiple lines")
             
         except Exception as e:
             raise Exception(f"Error communicating with MCP server: {str(e)}")

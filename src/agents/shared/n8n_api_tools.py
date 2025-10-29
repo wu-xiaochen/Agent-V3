@@ -235,37 +235,55 @@ class N8NGenerateAndCreateWorkflowTool(BaseTool):
     """N8N 智能生成并创建工作流工具 - AI 描述转工作流"""
     
     name: str = "n8n_generate_and_create_workflow"
-    description: str = """【n8n工作流生成工具】
+    description: str = """【n8n AI工作流生成工具】- 创建智能自动化工作流
 
-⚠️ 仅用于工作流自动化场景！
+⚡ 主要用途:
+1. 创建 AI 对话/问答系统（支持 AI Agent 节点）
+2. 创建自动化业务流程（定时、触发、数据处理）
+3. 创建 webhook API 接口（接收请求、AI 处理、返回响应）
 
-⚡ 何时使用此工具:
-- 用户明确要求创建 "n8n 工作流"、"自动化流程"
-- 需要定时任务、webhook 触发、数据处理流程
-- 关键词："n8n"、"工作流"、"自动化"、"定时"、"触发器"
+⭐ 何时使用此工具:
+
+✅ AI 对话场景（推荐！）
+- "创建一个 AI 对话"、"n8n 智能体对话"
+- "创建智能客服"、"问答系统"
+- "创建 AI 助手 API"
+- 关键词: "对话"、"AI"、"聊天"、"问答"、"智能体"
+
+✅ 自动化流程场景
+- "创建 n8n 工作流"、"自动化流程"
+- "定时任务"、"webhook 触发"
+- "数据处理管道"、"集成系统"
+- 关键词: "n8n"、"工作流"、"自动化"、"定时"
 
 ❌ 何时不使用:
-- 用户说"运行它"（应该检查上下文，可能是 CrewAI）
+- 用户说"运行它"（可能是 CrewAI）
 - 用户要求分析或研究（使用 CrewAI）
-- 简单的数据处理（使用其他工具）
-- 用户刚生成了 CrewAI 配置（不要用 n8n）
+- 用户刚生成了 CrewAI 配置
+- 不涉及工作流自动化的任务
 
 📋 输入要求:
-- description: 简短的工作流描述（1-2句话）
-- 不要提供 JSON 或复杂配置
+- description: 简洁描述需求（1-2句话）
+- 自动识别场景类型（AI对话/自动化/API等）
 
 💡 正确示例:
-- "每小时检查库存"
-- "接收订单请求"
-- "定时发送报告"
-- "自动化采购流程"
 
-错误示例（不要这样做）:
+AI 对话场景:
+- "创建一个智能客服对话"
+- "n8n AI Agent 对话系统"
+- "问答机器人"
+
+自动化场景:
+- "每小时检查库存并发邮件"
+- "接收订单webhook并存储数据库"
+- "定时生成销售报告"
+
+❌ 错误示例:
 - 不要提供 JSON 配置
-- 不要提供详细的节点配置
-- 不要提供复杂的步骤说明
+- 不要提供详细节点配置
+- 不要提供复杂步骤说明
 
-返回: 创建结果，包含工作流 ID 和访问链接
+返回: 工作流创建结果 + 访问链接 + 使用说明
 """
     
     api_url: str = Field(default="")
@@ -349,72 +367,84 @@ class N8NGenerateAndCreateWorkflowTool(BaseTool):
 
 用户需求: {description}
 
-请设计一个包含 3-6 个节点的工作流，要求：
-1. 第一个节点必须是触发器（trigger）
-2. 后续节点实现业务逻辑
-3. 节点之间要有清晰的连接关系
-4. 使用真实可用的 n8n 节点类型
+🎯 设计原则：
+1. 第一个节点必须是触发器（webhook/manualTrigger/scheduleTrigger）
+2. 优先使用 AI Agent 处理智能任务（对话、分析、生成内容等）
+3. 节点数量：3-8个（根据需求复杂度）
+4. 每个节点都要有明确的作用
+5. 连接要完整、逻辑清晰
 
-可用的节点类型：
+📋 常用节点类型：
 
-【触发器类】
-- manualTrigger: 手动触发
-- webhook: Webhook 触发器
-- scheduleTrigger: 定时触发（按时间表）
+【触发器类】（第一个节点必须是这些之一）
+- webhook: Webhook 触发器 ⭐ 推荐用于对话/API场景
+- manualTrigger: 手动触发 ⭐ 推荐用于测试
+- scheduleTrigger: 定时触发（Cron 表达式）
 - emailTrigger: 邮件触发
 
-【数据处理类】
-- set: 设置变量/数据
-- if: 条件判断
-- switch: 多路分支（类似 switch-case）
-- merge: 合并多个数据流
-- splitInBatches: 批量处理
-- itemLists: 数组/列表操作
-- filter: 过滤数据
+【AI/智能类】⭐ 核心节点
+- aiAgent: AI Agent 智能体
+  * 功能：调用 LLM 执行复杂 AI 任务
+  * 用途：对话、分析、决策、问答、内容生成、总结、翻译等
+  * 配置：需设置 model（如 gpt-4）、prompt、tools
+  * ⭐ 对话场景必选节点！
+  
+- chatOpenAI: OpenAI 聊天 API
+- chatAnthropic: Claude 聊天 API
+- embeddings: 文本向量化
+- vectorStore: 向量数据库（RAG）
+- memoryManager: 对话记忆管理 ⭐ 多轮对话必选
 
-【AI/智能类】
-- aiAgent: AI Agent 智能体（可调用 LLM 执行复杂任务：分析、总结、决策、问答、内容生成）
-- chatOpenAI: OpenAI 聊天模型
-- chatAnthropic: Claude 聊天模型
-- embeddings: 文本向量化/嵌入
-- vectorStore: 向量数据库（存储和检索）
-- memoryManager: 对话记忆管理
+【数据处理类】
+- set: 设置/转换数据 ⭐ 常用
+- code: JavaScript 代码 ⭐ 灵活
+- if: 条件判断
+- switch: 多路分支
+- filter: 过滤数据
+- merge: 合并数据流
+- aggregate: 聚合数据
 
 【HTTP/API 类】
-- httpRequest: HTTP API 调用
-- webhook: Webhook 响应
+- httpRequest: HTTP API 调用 ⭐ 调用外部服务
 
 【数据库类】
-- postgres: PostgreSQL 数据库
-- mysql: MySQL 数据库
-- mongodb: MongoDB 数据库
-- redis: Redis 缓存
+- postgres: PostgreSQL
+- mongodb: MongoDB
+- redis: Redis 缓存 ⭐ 存储会话
 
-【通知类】
+【响应类】
+- respondToWebhook: Webhook 响应 ⭐ 对话场景必选
 - emailSend: 发送邮件
 - slack: Slack 通知
-- telegram: Telegram 消息
-- discord: Discord 消息
 
-【文件处理类】
-- readBinaryFile: 读取文件
-- writeBinaryFile: 写入文件
-- spreadsheet: 表格处理
+⭐⭐⭐ 场景模板 ⭐⭐⭐
 
-【工具类】
-- code: JavaScript 代码执行
-- executeCommand: 执行命令行
-- wait: 等待/延迟
-- noOp: 空操作（仅传递数据）
+场景1: AI 对话/问答系统（最常见）
+流程: webhook → aiAgent（配置 prompt 和 model）→ respondToWebhook
+关键点: 
+  - webhook 接收用户输入
+  - aiAgent 处理对话逻辑
+  - respondToWebhook 返回结果
 
-⭐ 节点使用建议：
-- AI 任务（分析、生成、问答）→ aiAgent, chatOpenAI, chatAnthropic
-- 数据处理（转换、过滤）→ set, filter, code
-- 条件判断（单一条件）→ if
-- 多分支判断 → switch
-- 外部 API 调用 → httpRequest
-- 数据存储 → postgres, mongodb, redis
-- 通知提醒 → emailSend, slack, telegram
+场景2: AI 对话 + 记忆（推荐）
+流程: webhook → memoryManager(load) → aiAgent → memoryManager(save) → respondToWebhook
+关键点: 先加载历史，AI 处理，保存记忆，返回结果
+
+场景3: AI 分析 + 数据库
+流程: webhook → set(prepare data) → aiAgent(analyze) → postgres(save) → respondToWebhook
+
+场景4: 定时 AI 任务
+流程: scheduleTrigger → httpRequest(fetch data) → aiAgent(analyze) → emailSend(report)
+
+⚠️ 重要规则：
+1. webhook 触发器后面通常接 aiAgent 或 set
+2. AI 对话场景必须包含: webhook → aiAgent → respondToWebhook
+3. aiAgent 节点的 parameters 需要包含：
+   - model: "gpt-4" 或其他模型
+   - prompt: 具体的 AI 指令
+   - (可选) tools: 工具列表
+4. 多轮对话要用 memoryManager
+5. 所有分支最后都要有输出节点
 
 请以 JSON 格式返回工作流设计，格式如下：
 {{
@@ -519,8 +549,12 @@ class N8NGenerateAndCreateWorkflowTool(BaseTool):
             return "第一个节点缺少 type 字段"
         
         first_node_type = first_node["type"].lower()
-        if "trigger" not in first_node_type and "manual" not in first_node_type:
-            return f"第一个节点必须是触发器类型，但得到: {first_node['type']}"
+        # webhook、manualTrigger、scheduleTrigger 等都是触发器类型
+        trigger_keywords = ["trigger", "manual", "webhook", "schedule", "cron"]
+        is_trigger = any(keyword in first_node_type for keyword in trigger_keywords)
+        
+        if not is_trigger:
+            return f"第一个节点必须是触发器类型（trigger/webhook/manual），但得到: {first_node['type']}"
         
         # 检查所有节点是否有必需字段
         node_names = set()

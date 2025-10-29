@@ -37,7 +37,7 @@ agents:
     enabled: true
     model: "Pro/deepseek-ai/DeepSeek-V3.1-Terminus"
     prompts_config: "config/base/prompts.yaml"
-    system_prompt: "supply_chain_planning"
+    system_prompt: "unified_agent"  # 使用unified_agent专用提示词
     tools_prompt: "user_guidance"
     memory_prompt: "user_guidance"
     parameters:

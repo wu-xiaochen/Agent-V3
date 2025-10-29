@@ -1,89 +1,103 @@
 version: "1.0"
 description: "数据库配置"
 
-database:
-  main:
-    host: "localhost"
-    port: 5432
-    database: "trae_agents"
-    username: "${DB_USERNAME}"
-    password: "${DB_PASSWORD}"
-    driver: "postgresql"
-    pool_size: 10
-    max_overflow: 20
-    pool_timeout: 30
-    pool_recycle: 3600
-    echo: false
-    ssl_mode: "prefer"
-
-  redis:
-    host: "localhost"
-    port: 6379
-    db: 0
-    password: "${REDIS_PASSWORD:}"
-    max_connections: 10
-    socket_timeout: 5
-    socket_connect_timeout: 5
-    retry_on_timeout: true
-    health_check_interval: 30
-
-  sqlite:
-    path: "./data/agents.db"
-    echo: false
-    pool_size: 5
-    max_overflow: 10
-
-  mongodb:
-    host: "localhost"
-    port: 27017
-    database: "trae_agents"
-    username: "${MONGO_USERNAME:}"
-    password: "${MONGO_PASSWORD:}"
-    auth_source: "admin"
-    connection_pool_size: 10
-    max_pool_size: 50
-    min_pool_size: 5
-    max_idle_time_ms: 30000
-    server_selection_timeout_ms: 30000
-    connect_timeout_ms: 20000
-    socket_timeout_ms: 20000
-    retry_writes: true
-    w: "majority"
-    read_preference: "primary"
-    ssl: false
-    ssl_cert_file: "${MONGO_SSL_CERT_FILE:}"
-    ssl_key_file: "${MONGO_SSL_KEY_FILE:}"
-    ssl_ca_file: "${MONGO_SSL_CA_FILE:}"
-
-  elasticsearch:
-    hosts: ["localhost:9200"]
-    username: "${ES_USERNAME:}"
-    password: "${ES_PASSWORD:}"
-    index_prefix: "trae_agents"
+# Redis配置（会话存储、缓存）
+redis:
+  host: "${REDIS_HOST:localhost}"
+  port: "${REDIS_PORT:6379}"
+  database: "${REDIS_DB:0}"
+  password: "${REDIS_PASSWORD:}"
+  connection_pool:
+    max_connections: 50
     timeout: 30
-    max_retries: 3
-    retry_on_timeout: true
-    ssl: false
-    verify_certs: true
-    ssl_assert_hostname: false
-    ssl_show_warn: false
-    ca_certs: "${ES_CA_CERTS:}"
-    client_cert: "${ES_CLIENT_CERT:}"
-    client_key: "${ES_CLIENT_KEY:}"
+  ttl:
+    default: 3600
+    conversation: 86400
+  socket_timeout: 5
+  socket_connect_timeout: 5
+  retry_on_timeout: true
+  health_check_interval: 30
 
+# PostgreSQL配置（如需持久化存储）
+postgresql:
+  host: "${POSTGRES_HOST:localhost}"
+  port: "${POSTGRES_PORT:5432}"
+  database: "${POSTGRES_DB:trae_agents}"
+  username: "${POSTGRES_USER:}"
+  password: "${POSTGRES_PASSWORD:}"
+  driver: "postgresql"
+  pool_size: 10
+  max_overflow: 20
+  pool_timeout: 30
+  pool_recycle: 3600
+  echo: false
+  ssl_mode: "prefer"
+
+# SQLite配置（轻量级本地存储）
+sqlite:
+  path: "./data/agents.db"
+  echo: false
+  pool_size: 5
+  max_overflow: 10
+
+# MongoDB配置（文档存储）
+mongodb:
+  host: "${MONGO_HOST:localhost}"
+  port: "${MONGO_PORT:27017}"
+  database: "${MONGO_DB:trae_agents}"
+  username: "${MONGO_USERNAME:}"
+  password: "${MONGO_PASSWORD:}"
+  auth_source: "admin"
+  connection_pool_size: 10
+  max_pool_size: 50
+  min_pool_size: 5
+  max_idle_time_ms: 30000
+  server_selection_timeout_ms: 30000
+  connect_timeout_ms: 20000
+  socket_timeout_ms: 20000
+  retry_writes: true
+  w: "majority"
+  read_preference: "primary"
+  ssl: false
+  ssl_cert_file: "${MONGO_SSL_CERT_FILE:}"
+  ssl_key_file: "${MONGO_SSL_KEY_FILE:}"
+  ssl_ca_file: "${MONGO_SSL_CA_FILE:}"
+
+# Elasticsearch配置（全文搜索）
+elasticsearch:
+  hosts: ["${ES_HOST:localhost:9200}"]
+  username: "${ES_USERNAME:}"
+  password: "${ES_PASSWORD:}"
+  index_prefix: "trae_agents"
+  timeout: 30
+  max_retries: 3
+  retry_on_timeout: true
+  ssl: false
+  verify_certs: true
+  ssl_assert_hostname: false
+  ssl_show_warn: false
+  ca_certs: "${ES_CA_CERTS:}"
+  client_cert: "${ES_CLIENT_CERT:}"
+  client_key: "${ES_CLIENT_KEY:}"
+
+# 向量数据库配置
+vector_database:
+  # ChromaDB配置（本地向量数据库）
   chromadb:
     path: "./data/chroma"
     collection_name: "supply_chain"
     distance_function: "cosine"
     n_results: 10
 
+  # FAISS配置（高性能向量检索）
   faiss:
-    path: "./data/faiss"
+    index_path: "./data/faiss"
     index_type: "IndexFlatIP"
     dimension: 1536
     nlist: 100
     nprobe: 10
 
+  # Pinecone配置（云端向量数据库）
   pinecone:
     api_key: "${PINECONE_API_KEY}"
     environment: "${PINECONE_ENVIRONMENT}"
@@ -93,27 +107,3 @@ database:
     pod_type: "p1.x1"
     replicas: 1
     pods: 1
-
-agents:
-  supply_chain:
-    enabled: true
-    model: "gpt-4"
-    parameters:
-      temperature: 0.7
-      max_tokens: 1000
-  unified:
-    enabled: true
-    model: "gpt-4"
-    parameters:
-      temperature: 0.7
-      max_tokens: 1000
-
-logging:
-  level: "INFO"
-  format: "json"
-  file: "logs/agent.log"
-
-crewai:
-  default_model: "gpt-4"
-  max_agents: 10
-  max_tasks: 20

@@ -183,20 +183,27 @@
     {
       "type": "mcp_stdio",
       "name": "n8n_mcp_generator",
-      "description": "N8N工作流生成工具",
+      "description": "N8N工作流生成工具（通过持久化 Docker 容器）",
       "enabled": true,
       "command": "docker",
-      "args": ["exec", "n8n-mcp", "node", "dist/mcp/index.js"],
-      "env": {
-        "N8N_API_URL": "http://host.docker.internal:5678",
-        "N8N_API_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkNjU4MDQ2Ni01MDkyLTQyYmEtODc1NS1lMDM4M2M2MDAxNzMiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzYxNjMxNjA0LCJleHAiOjE3NjQyMTk2MDB9.Ktof_b_2Ejzd0sYTA2ITph8QdSZ35jKe-elgehjOCRQ"
-      },
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--init",
+        "-e", "N8N_API_URL=http://host.docker.internal:5678",
+        "-e", "N8N_API_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkNjU4MDQ2Ni01MDkyLTQyYmEtODc1NS1lMDM4M2M2MDAxNzMiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzYxNjMxNjA0LCJleHAiOjE3NjQyMTk2MDB9.Ktof_b_2Ejzd0sYTA2ITph8QdSZ35jKe-elgehjOCRQ",
+        "ghcr.io/czlonkowski/n8n-mcp:latest"
+      ],
+      "env": {},
       "tools": [
-        "n8n_search_nodes",
-        "n8n_get_node_info",
-        "n8n_generate_workflow",
-        "n8n_validate_workflow",
-        "n8n_deploy_workflow"
+        "create_workflow",
+        "update_workflow",
+        "validate_workflow",
+        "autofix_workflow",
+        "list_workflows",
+        "search_nodes",
+        "get_node_info"
       ]
     }
   ],

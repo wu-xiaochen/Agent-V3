@@ -4,6 +4,7 @@
 """
 
 import warnings
+import logging
 from typing import Dict, Any, List, Optional
 from enum import Enum  # 🆕 导入枚举
 from langchain.agents import AgentExecutor, create_react_agent
@@ -19,6 +20,9 @@ from src.config.config_loader import config_loader
 from src.prompts.prompt_loader import prompt_loader
 from src.core.services.context_manager import ConversationBufferWithSummary, ContextManager
 from src.core.services.context_tracker import ContextTracker  # 🆕 导入上下文追踪器
+
+# 创建logger实例（在所有导入之后）
+logger = logging.getLogger(__name__)
 
 
 # 🆕 智能体停止原因枚举
@@ -170,22 +174,9 @@ class UnifiedAgent:
             prompts_config = config_loader.get_prompts_config()
             prompts = prompts_config.get("prompts", {})
             
-            # 获取系统提示词
+            # 获取系统提示词配置
             prompt_config = prompts.get(system_prompt_key, {})
             system_prompt_template = prompt_config.get("template", "")
-            
-            if not system_prompt_template:
-                # 回退到硬编码的提示词
-                print(f"未找到配置的提示词 {system_prompt_key}，使用默认提示词")
-                system_prompt_template = """你是一位专业的供应链管理专家和业务流程规划顾问。
-你的主要职责是理解用户的供应链需求，提供专业的业务流程规划建议。
-
-当用户询问关于n8n工作流或智能体对话生成时，你应该：
-1. 明确告诉用户你可以使用n8n_mcp_generator工具来生成工作流
-2. 询问用户需要什么类型的工作流或对话
-3. 使用n8n_mcp_generator工具来完成任务
-
-{agent_scratchpad}"""
             
             # 获取当前时间信息
             from datetime import datetime
@@ -193,8 +184,23 @@ class UnifiedAgent:
             current_date = datetime.now().strftime("%Y年%m月%d日")
             current_year = datetime.now().year
             
-            # 构建完整的React提示词模板 - 智能、简洁、高效
-            template = f"""You are an intelligent AI assistant. Current date: {current_date} ({current_year}).
+            if system_prompt_template:
+                # ✅ 使用配置文件中的提示词，并注入时间信息
+                template = system_prompt_template.format(
+                    current_date=current_date,
+                    current_year=current_year
+                )
+                
+                # ✅ 获取并存储提示词参数配置（用于LLM）
+                prompt_params = prompt_config.get("parameters", {})
+                if prompt_params:
+                    self._prompt_parameters = prompt_params
+                    logger.info(f"✅ 使用提示词 '{system_prompt_key}' 及其参数配置")
+                
+            else:
+                # 回退到硬编码的提示词（保留作为fallback）
+                logger.warning(f"⚠️ 未找到配置的提示词 '{system_prompt_key}'，使用默认提示词")
+                template = f"""You are an intelligent AI assistant. Current date: {current_date} ({current_year}).
 
 ╔════════════════════════════════════════════════════════════════════╗
 ║                    🤖 INTELLIGENT BEHAVIOR RULES                  ║
@@ -329,7 +335,7 @@ Thought:{agent_scratchpad}"""
             tools=self.tools,
             verbose=verbose_mode,  # 根据模式决定是否verbose
             handle_parsing_errors=True,
-            early_stopping_method="generate",  # 🆕 允许智能体在不需要工具时直接生成答案
+            # early_stopping_method="generate" 在某些 LangChain 版本不支持，已移除
             max_iterations=max_iterations,  # 从配置文件读取迭代次数
             max_execution_time=max_execution_time,  # 从配置文件读取执行时间
             callbacks=callbacks if callbacks else None,  # 添加流式处理器

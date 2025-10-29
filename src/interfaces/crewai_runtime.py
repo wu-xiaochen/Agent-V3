@@ -24,14 +24,16 @@ from src.config.config_loader import config_loader
 class CrewAIRuntime:
     """通用CrewAI运行时类"""
     
-    def __init__(self, config_path=None):
+    def __init__(self, config_path=None, config_dir="config/generated"):
         """
         初始化CrewAI运行时
         
         Args:
             config_path: 配置文件路径，支持JSON和YAML格式
+            config_dir: 配置文件目录（用于配置ID查询）
         """
         self.config_path = config_path
+        self.config_dir = Path(config_dir)
         self.config_data = None
         self.crew = None
         self.agents = []
@@ -137,6 +139,65 @@ class CrewAIRuntime:
             
         logging.info("CrewAI配置验证通过")
         return True
+    
+    def load_config_by_id(self, config_id: str) -> bool:
+        """
+        根据配置ID加载配置
+        
+        Args:
+            config_id: 配置ID
+            
+        Returns:
+            bool: 加载是否成功
+        """
+        # 搜索配置目录
+        if not self.config_dir.exists():
+            print(f"❌ 配置目录不存在: {self.config_dir}")
+            return False
+        
+        for config_file in self.config_dir.glob("*.json"):
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    if config.get("config_id") == config_id:
+                        self.config_data = config
+                        self.config_path = str(config_file)
+                        print(f"✅ 找到配置: {config_file.name} (ID: {config_id})")
+                        return True
+            except Exception as e:
+                continue
+        
+        print(f"❌ 未找到配置ID: {config_id}")
+        return False
+    
+    def list_saved_configs(self) -> list:
+        """
+        列出所有保存的配置
+        
+        Returns:
+            配置列表
+        """
+        configs = []
+        
+        if not self.config_dir.exists():
+            print(f"⚠️ 配置目录不存在: {self.config_dir}")
+            return configs
+        
+        for config_file in self.config_dir.glob("*.json"):
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    configs.append({
+                        "file": config_file.name,
+                        "config_id": config.get("config_id"),
+                        "name": config.get("crewai_config", {}).get("name"),
+                        "created_at": config.get("generated_at"),
+                        "path": str(config_file)
+                    })
+            except Exception as e:
+                continue
+        
+        return configs
     
     def load_crew_from_config(self, config_data):
         """
