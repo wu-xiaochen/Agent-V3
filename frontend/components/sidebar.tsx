@@ -45,14 +45,33 @@ export function Sidebar() {
     const newSessionId = `session-${Date.now()}`
     setCurrentSession(newSessionId)
     clearMessages()
-    loadSessions()
+    // 立即更新本地会话列表
+    setSessions(prev => [
+      {
+        session_id: newSessionId,
+        message_count: 0,
+        last_message: "New conversation",
+        is_active: true
+      },
+      ...prev.map(s => ({ ...s, is_active: false }))
+    ])
   }
 
   // 切换会话
   const handleSelectSession = (sessionId: string) => {
+    if (sessionId === currentSession) return // 如果已经是当前会话，不做任何操作
+    
     setCurrentSession(sessionId)
     clearMessages()
-    // TODO: 加载该会话的历史消息
+    
+    // 更新会话状态
+    setSessions(prev => prev.map(s => ({
+      ...s,
+      is_active: s.session_id === sessionId
+    })))
+    
+    // TODO: 从后端加载该会话的历史消息
+    console.log(`Switched to session: ${sessionId}`)
   }
 
   // 删除会话
