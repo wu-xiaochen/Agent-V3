@@ -1,0 +1,117 @@
+# 统一工具配置文件
+# 支持 MCP 和 API 两种模式的工具定义
+
+version: "1.0"
+description: "Agent-V3 统一工具配置"
+
+# 工具定义
+tools:
+  # 内置工具
+  - name: "time"
+    display_name: "时间工具"
+    type: "builtin"
+    enabled: true
+    description: "获取当前时间和日期"
+    module: "src.agents.shared.tools"
+    class: "TimeTool"
+    
+  - name: "search"
+    display_name: "网络搜索"
+    type: "builtin"
+    enabled: true
+    description: "搜索网络信息"
+    module: "src.agents.shared.tools"
+    class: "SearchTool"
+    parameters:
+      max_results: 5
+      
+  - name: "calculator"
+    display_name: "计算器"
+    type: "builtin"
+    enabled: false
+    description: "执行数学计算"
+    module: "src.agents.shared.tools"
+    class: "CalculatorTool"
+  
+  # MCP 工具 - N8N
+  - name: "n8n_mcp_generator"
+    display_name: "N8N 工作流生成器"
+    type: "mcp"
+    mode: "stdio"
+    enabled: true
+    description: "使用 n8n-mcp 生成和部署 n8n 工作流"
+    config:
+      # MCP stdio 配置
+      command: "docker"
+      args:
+        - "exec"
+        - "-i"
+        - "n8n-mcp-server"
+        - "node"
+        - "dist/mcp/index.js"
+        - "--transport=stdio"
+      env:
+        N8N_API_URL: "${N8N_API_URL:http://localhost:5678}"
+        N8N_API_KEY: "${N8N_API_KEY}"
+      timeout: 120
+      container_name: "n8n-mcp-server"
+    # 如果 MCP 不可用，使用 API 模式作为后备
+    fallback:
+      type: "api"
+      module: "src.agents.shared.n8n_api_tools"
+      function: "create_n8n_api_tools"
+      
+  # API 工具 - CrewAI
+  - name: "crewai_generator"
+    display_name: "CrewAI 配置生成器"
+    type: "api"
+    enabled: true
+    description: "生成 CrewAI 多智能体配置"
+    module: "src.tools.crewai_generator"
+    class: "CrewAIGeneratorTool"
+    parameters:
+      auto_save: true
+      save_dir: "config/generated"
+      
+  - name: "crewai_runtime"
+    display_name: "CrewAI 运行时"
+    type: "api"
+    enabled: true
+    description: "运行 CrewAI 团队任务"
+    module: "src.interfaces.crewai_runtime"
+    class: "CrewAIRuntime"
+    parameters:
+      config_dir: "config/generated"
+      
+  - name: "generate_document"
+    display_name: "文档生成器"
+    type: "api"
+    enabled: true
+    description: "生成 Markdown 文档并提供下载链接"
+    module: "src.tools.document_generator"
+    function: "create_document_generator_tool"
+      
+# 工具组 - 用于快速启用/禁用一组工具
+tool_groups:
+  basic:
+    name: "基础工具组"
+    tools: ["time", "search"]
+    
+  automation:
+    name: "自动化工具组"
+    tools: ["n8n_mcp_generator", "crewai_generator", "crewai_runtime"]
+    
+  all:
+    name: "所有工具"
+    tools: ["time", "search", "calculator", "n8n_mcp_generator", "crewai_generator", "crewai_runtime", "generate_document"]
+
+# 默认启用的工具组
+default_group: "all"
+
+# 工具加载配置
+loading:
+  parallel: true          # 并行加载工具
+  fail_on_error: false    # 单个工具失败不影响其他工具
+  retry_count: 2          # 重试次数
+  timeout: 30             # 单个工具加载超时（秒）
+

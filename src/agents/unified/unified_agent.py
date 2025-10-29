@@ -20,6 +20,7 @@ from src.config.config_loader import config_loader
 from src.prompts.prompt_loader import prompt_loader
 from src.core.services.context_manager import ConversationBufferWithSummary, ContextManager
 from src.core.services.context_tracker import ContextTracker  # 🆕 导入上下文追踪器
+from src.infrastructure.tools import get_tool_registry, get_tool_factory  # 🆕 导入工具注册系统
 
 # 创建logger实例（在所有导入之后）
 logger = logging.getLogger(__name__)
@@ -89,14 +90,8 @@ class UnifiedAgent:
         # 🆕 初始化上下文追踪器
         self.context_tracker = ContextTracker(max_history=10)
         
-        # 使用新的动态工具加载器
-        try:
-            # 尝试使用智能体特定的工具配置
-            self.tools = get_tools_for_agent("unified_agent")
-        except Exception as e:
-            print(f"使用智能体特定工具配置失败: {e}")
-            # 回退到默认工具列表
-            self.tools = get_tools(["calculator", "search", "time", "crewai_generator", "crewai_runtime"]) if self.agent_config.get("enable_tools", True) else []
+        # 🆕 使用新的工具注册系统
+        self.tools = self._load_tools_from_registry()
         
         # 使用配置文件中的输出格式初始化OutputFormatter
         output_format = self.output_config.get("format", "normal")
@@ -108,6 +103,69 @@ class UnifiedAgent:
         # 存储会话信息
         self.session_id = session_id or "default"
         self.redis_url = redis_url
+    
+    def _load_tools_from_registry(self) -> List[Any]:
+        """
+        从工具注册器加载工具
+        
+        Returns:
+            工具列表
+        """
+        try:
+            # 获取工具注册器和工厂
+            registry = get_tool_registry()
+            factory = get_tool_factory()
+            
+            # 加载工具配置
+            if not registry._tools:  # 如果还没有加载配置
+                success = registry.load_from_config()
+                if not success:
+                    logger.warning("⚠️  工具注册器加载失败，回退到旧的工具加载方式")
+                    return self._fallback_load_tools()
+            
+            # 获取启用的工具列表
+            enabled_tools = registry.get_enabled_tools()
+            
+            if not enabled_tools:
+                logger.warning("⚠️  没有启用的工具，回退到默认工具")
+                return self._fallback_load_tools()
+            
+            # 使用工厂创建工具
+            loading_config = registry._loading_config
+            parallel = loading_config.get("parallel", True)
+            
+            logger.info(f"📦 开始加载 {len(enabled_tools)} 个工具...")
+            tools = factory.create_tools(enabled_tools, parallel=parallel)
+            
+            logger.info(f"✅ 成功加载 {len(tools)} 个工具")
+            return tools
+            
+        except Exception as e:
+            logger.error(f"❌ 从工具注册器加载工具失败: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+            return self._fallback_load_tools()
+    
+    def _fallback_load_tools(self) -> List[Any]:
+        """
+        回退到旧的工具加载方式
+        
+        Returns:
+            工具列表
+        """
+        logger.info("🔄 使用传统方式加载工具...")
+        try:
+            # 尝试使用智能体特定的工具配置
+            tools = get_tools_for_agent("unified_agent")
+            logger.info(f"✅ 使用智能体特定工具配置，加载 {len(tools)} 个工具")
+            return tools
+        except Exception as e:
+            logger.warning(f"使用智能体特定工具配置失败: {e}")
+            # 回退到默认工具列表
+            default_tools = ["search", "time", "crewai_generator", "crewai_runtime"]
+            tools = get_tools(default_tools) if self.agent_config.get("enable_tools", True) else []
+            logger.info(f"✅ 使用默认工具配置，加载 {len(tools)} 个工具")
+            return tools
     
     def _create_memory(self, memory_enabled: bool, redis_url: Optional[str], session_id: Optional[str]):
         """
