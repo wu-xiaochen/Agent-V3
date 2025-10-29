@@ -78,8 +78,8 @@ tools:
     type: "api"
     enabled: true
     description: "运行 CrewAI 团队任务"
-    module: "src.interfaces.crewai_runtime"
-    class: "CrewAIRuntime"
+    module: "src.tools.crewai_runtime_tool"
+    function: "create_crewai_runtime_tool"
     parameters:
       config_dir: "config/generated"
       

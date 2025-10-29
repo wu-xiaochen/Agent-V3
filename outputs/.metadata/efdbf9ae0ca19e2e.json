@@ -1,0 +1,14 @@
+{
+  "file_id": "efdbf9ae0ca19e2e",
+  "filename": "test_document.md",
+  "filepath": "documents/test_document.md",
+  "size": 76,
+  "size_human": "76.0B",
+  "mime_type": "text/plain",
+  "created_at": "2025-10-29T12:46:55.058013",
+  "expires_at": "2025-11-28T12:46:55.058025",
+  "tags": [
+    "test",
+    "demo"
+  ]
+}
