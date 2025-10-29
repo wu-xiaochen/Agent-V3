@@ -1,15 +1,81 @@
 "use client"
 
-import { useState } from "react"
-import { MessageSquare, Plus, Database, Users, Settings, ChevronLeft, ChevronRight } from "lucide-react"
+import { useState, useEffect } from "react"
+import { MessageSquare, Plus, Database, Users, Settings, ChevronLeft, ChevronRight, Trash2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useAppStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
+import { api } from "@/lib/api"
+
+interface Session {
+  session_id: string
+  message_count: number
+  last_message: string
+  is_active: boolean
+}
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
-  const { sessions, currentSession, setCurrentSession, createNewSession } = useAppStore()
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const { currentSession, setCurrentSession, clearMessages } = useAppStore()
+
+  // 加载会话列表
+  const loadSessions = async () => {
+    setIsLoading(true)
+    try {
+      const response = await api.chat.listSessions()
+      if (response.success) {
+        setSessions(response.sessions)
+      }
+    } catch (error) {
+      console.error("加载会话列表失败:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadSessions()
+  }, [])
+
+  // 创建新会话
+  const handleNewSession = () => {
+    const newSessionId = `session-${Date.now()}`
+    setCurrentSession(newSessionId)
+    clearMessages()
+    loadSessions()
+  }
+
+  // 切换会话
+  const handleSelectSession = (sessionId: string) => {
+    setCurrentSession(sessionId)
+    clearMessages()
+    // TODO: 加载该会话的历史消息
+  }
+
+  // 删除会话
+  const handleDeleteSession = async (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    
+    if (!confirm("确定要删除这个会话吗？")) {
+      return
+    }
+
+    try {
+      await api.chat.deleteSession(sessionId)
+      
+      // 如果删除的是当前会话，创建新会话
+      if (sessionId === currentSession) {
+        handleNewSession()
+      }
+      
+      loadSessions()
+    } catch (error) {
+      console.error("删除会话失败:", error)
+    }
+  }
 
   return (
     <div
@@ -32,7 +98,7 @@ export function Sidebar() {
 
       <div className="p-3">
         <Button
-          onClick={createNewSession}
+          onClick={handleNewSession}
           className="w-full bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
         >
           <Plus className="h-4 w-4" />
@@ -42,23 +108,60 @@ export function Sidebar() {
 
       <ScrollArea className="flex-1 px-3">
         <div className="space-y-1">
-          <div className="text-xs font-medium text-sidebar-muted-foreground px-2 py-2">
-            {!collapsed && "Recent Chats"}
+          <div className="flex items-center justify-between px-2 py-2">
+            {!collapsed && <div className="text-xs font-medium text-sidebar-muted-foreground">Recent Chats</div>}
+            {!collapsed && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={loadSessions}
+                disabled={isLoading}
+              >
+                <RefreshCw className={cn("h-3 w-3", isLoading && "animate-spin")} />
+              </Button>
+            )}
           </div>
-          {sessions.map((session) => (
-            <Button
-              key={session.id}
-              variant={currentSession === session.id ? "secondary" : "ghost"}
-              className={cn(
-                "w-full justify-start text-sidebar-foreground",
-                currentSession === session.id && "bg-sidebar-accent",
-              )}
-              onClick={() => setCurrentSession(session.id)}
-            >
-              <MessageSquare className="h-4 w-4 shrink-0" />
-              {!collapsed && <span className="ml-2 truncate text-sm">{session.title}</span>}
-            </Button>
-          ))}
+          {sessions.length === 0 ? (
+            !collapsed && (
+              <div className="text-xs text-sidebar-muted-foreground px-2 py-4 text-center">
+                No conversations yet
+              </div>
+            )
+          ) : (
+            sessions.map((session) => (
+              <div
+                key={session.session_id}
+                className={cn(
+                  "group relative flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer transition-colors",
+                  currentSession === session.session_id
+                    ? "bg-sidebar-accent"
+                    : "hover:bg-sidebar-accent/50"
+                )}
+                onClick={() => handleSelectSession(session.session_id)}
+              >
+                <MessageSquare className="h-4 w-4 shrink-0 text-sidebar-foreground" />
+                {!collapsed && (
+                  <>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-sidebar-foreground truncate">{session.last_message}</p>
+                      <p className="text-xs text-sidebar-muted-foreground">
+                        {session.message_count} messages
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => handleDeleteSession(session.session_id, e)}
+                    >
+                      <Trash2 className="h-3 w-3 text-destructive" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            ))
+          )}
         </div>
 
         {!collapsed && (

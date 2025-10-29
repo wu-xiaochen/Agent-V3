@@ -261,6 +261,109 @@ async def get_chat_history(session_id: str, limit: int = 50):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/chat/sessions")
+async def list_sessions():
+    """
+    列出所有会话
+    
+    Returns:
+        会话列表
+    """
+    try:
+        sessions = []
+        for session_id, agent in agent_instances.items():
+            # 获取最后一条消息
+            last_message = None
+            message_count = 0
+            
+            if hasattr(agent.memory, "messages") and agent.memory.messages:
+                messages = agent.memory.messages
+                message_count = len(messages)
+                # 获取最后一条用户消息
+                for msg in reversed(messages):
+                    if msg.type == "human":
+                        last_message = msg.content[:50] + "..." if len(msg.content) > 50 else msg.content
+                        break
+            
+            sessions.append({
+                "session_id": session_id,
+                "message_count": message_count,
+                "last_message": last_message or "新对话",
+                "is_active": session_id in websocket_connections
+            })
+        
+        return {
+            "success": True,
+            "count": len(sessions),
+            "sessions": sessions
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ 列出会话失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/chat/sessions/{session_id}")
+async def delete_session(session_id: str):
+    """
+    删除会话
+    
+    Args:
+        session_id: 会话ID
+        
+    Returns:
+        删除结果
+    """
+    try:
+        if session_id not in agent_instances:
+            raise HTTPException(status_code=404, detail="会话不存在")
+        
+        # 删除 agent 实例
+        del agent_instances[session_id]
+        
+        # 如果有 WebSocket 连接，也删除
+        if session_id in websocket_connections:
+            del websocket_connections[session_id]
+        
+        logger.info(f"🗑️ 已删除会话: {session_id}")
+        
+        return {
+            "success": True,
+            "message": f"会话 {session_id} 已删除"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 删除会话失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/chat/sessions")
+async def clear_all_sessions():
+    """
+    清空所有会话
+    
+    Returns:
+        清空结果
+    """
+    try:
+        count = len(agent_instances)
+        agent_instances.clear()
+        websocket_connections.clear()
+        
+        logger.info(f"🗑️ 已清空所有会话，共 {count} 个")
+        
+        return {
+            "success": True,
+            "message": f"已清空 {count} 个会话"
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ 清空会话失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.websocket("/api/chat/stream")
 async def chat_stream(websocket: WebSocket):
     """

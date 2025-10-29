@@ -12,6 +12,7 @@ interface AppState {
   setCurrentSession: (sessionId: string) => void
   addMessage: (message: Message) => void
   updateMessage: (id: string, updates: Partial<Message>) => void
+  clearMessages: () => void
   setToolPanelOpen: (open: boolean) => void
   setCurrentTool: (tool: ToolType | null) => void
   toggleDarkMode: () => void
@@ -41,6 +42,8 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({
       messages: state.messages.map((msg) => (msg.id === id ? { ...msg, ...updates } : msg)),
     })),
+
+  clearMessages: () => set({ messages: [] }),
 
   setToolPanelOpen: (open) => set({ toolPanelOpen: open }),
 

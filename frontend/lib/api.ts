@@ -202,6 +202,39 @@ export const chatAPI = {
       console.error("WebSocket is not connected")
     }
   },
+
+  /**
+   * 列出所有会话
+   */
+  async listSessions(): Promise<{
+    success: boolean
+    count: number
+    sessions: Array<{
+      session_id: string
+      message_count: number
+      last_message: string
+      is_active: boolean
+    }>
+  }> {
+    const response = await apiClient.get("/api/chat/sessions")
+    return response.data
+  },
+
+  /**
+   * 删除会话
+   */
+  async deleteSession(sessionId: string): Promise<{ success: boolean; message: string }> {
+    const response = await apiClient.delete(`/api/chat/sessions/${sessionId}`)
+    return response.data
+  },
+
+  /**
+   * 清空所有会话
+   */
+  async clearAllSessions(): Promise<{ success: boolean; message: string }> {
+    const response = await apiClient.delete("/api/chat/sessions")
+    return response.data
+  },
 }
 
 // ==================== Files API ====================

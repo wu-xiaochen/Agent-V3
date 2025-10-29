@@ -17,10 +17,19 @@ export function ChatInterface() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const { messages, addMessage } = useAppStore()
 
+  // 自动滚动到底部
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
+    // 使用 setTimeout 确保 DOM 更新后再滚动
+    const timer = setTimeout(() => {
+      if (scrollRef.current) {
+        const scrollElement = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]')
+        if (scrollElement) {
+          scrollElement.scrollTop = scrollElement.scrollHeight
+        }
+      }
+    }, 100)
+    
+    return () => clearTimeout(timer)
   }, [messages])
 
   const handleSend = async () => {
@@ -177,7 +186,8 @@ export function ChatInterface() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Type your message..."
-              className="min-h-[60px] max-h-[200px] resize-none"
+              className="min-h-[44px] max-h-[120px] resize-none"
+              rows={1}
             />
             <Button
               onClick={handleSend}
