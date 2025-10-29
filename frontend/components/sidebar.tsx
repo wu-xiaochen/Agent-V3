@@ -19,7 +19,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const [sessions, setSessions] = useState<Session[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const { currentSession, setCurrentSession, clearMessages } = useAppStore()
+  const { currentSession, setCurrentSession, clearMessages, setToolPanelOpen, setActiveTab } = useAppStore()
 
   // 加载会话列表
   const loadSessions = async () => {
@@ -168,11 +168,25 @@ export function Sidebar() {
           <>
             <div className="text-xs font-medium text-sidebar-muted-foreground px-2 py-2 mt-6">Quick Access</div>
             <div className="space-y-1">
-              <Button variant="ghost" className="w-full justify-start text-sidebar-foreground">
+              <Button 
+                variant="ghost" 
+                className="w-full justify-start text-sidebar-foreground"
+                onClick={() => {
+                  setActiveTab("knowledge")
+                  setToolPanelOpen(true)
+                }}
+              >
                 <Database className="h-4 w-4" />
                 <span className="ml-2 text-sm">Knowledge Bases</span>
               </Button>
-              <Button variant="ghost" className="w-full justify-start text-sidebar-foreground">
+              <Button 
+                variant="ghost" 
+                className="w-full justify-start text-sidebar-foreground"
+                onClick={() => {
+                  setActiveTab("crewai")
+                  setToolPanelOpen(true)
+                }}
+              >
                 <Users className="h-4 w-4" />
                 <span className="ml-2 text-sm">CrewAI Teams</span>
               </Button>
@@ -182,7 +196,14 @@ export function Sidebar() {
       </ScrollArea>
 
       <div className="p-3 border-t border-sidebar-border">
-        <Button variant="ghost" className="w-full justify-start text-sidebar-foreground">
+        <Button 
+          variant="ghost" 
+          className="w-full justify-start text-sidebar-foreground"
+          onClick={() => {
+            setActiveTab("tools")
+            setToolPanelOpen(true)
+          }}
+        >
           <Settings className="h-4 w-4" />
           {!collapsed && <span className="ml-2 text-sm">Settings</span>}
         </Button>

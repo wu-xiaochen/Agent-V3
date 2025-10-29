@@ -7,6 +7,7 @@ interface AppState {
   sessions: ChatSession[]
   toolPanelOpen: boolean
   currentTool: ToolType | null
+  activeTab: string
   darkMode: boolean
 
   setCurrentSession: (sessionId: string) => void
@@ -15,6 +16,7 @@ interface AppState {
   clearMessages: () => void
   setToolPanelOpen: (open: boolean) => void
   setCurrentTool: (tool: ToolType | null) => void
+  setActiveTab: (tab: string) => void
   toggleDarkMode: () => void
   createNewSession: () => void
 }
@@ -32,6 +34,7 @@ export const useAppStore = create<AppState>((set) => ({
   ],
   toolPanelOpen: false,
   currentTool: null,
+  activeTab: "crewai",
   darkMode: true,
 
   setCurrentSession: (sessionId) => set({ currentSession: sessionId }),
@@ -48,6 +51,8 @@ export const useAppStore = create<AppState>((set) => ({
   setToolPanelOpen: (open) => set({ toolPanelOpen: open }),
 
   setCurrentTool: (tool) => set({ currentTool: tool }),
+
+  setActiveTab: (tab) => set({ activeTab: tab }),
 
   toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
 

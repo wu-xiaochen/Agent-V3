@@ -7,10 +7,10 @@ import { useAppStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import { CrewAIVisualizer } from "./crewai-visualizer"
 import { KnowledgeBrowser } from "./knowledge-browser"
-import { ToolsPanel } from "./tools-panel"
+import { ToolsSettings } from "./tools-settings"
 
 export function ToolPanel() {
-  const { toolPanelOpen, setToolPanelOpen, currentTool, setCurrentTool } = useAppStore()
+  const { toolPanelOpen, setToolPanelOpen, activeTab, setActiveTab } = useAppStore()
 
   return (
     <>
@@ -37,7 +37,7 @@ export function ToolPanel() {
           </Button>
         </div>
 
-        <Tabs defaultValue="crewai" className="h-[calc(100%-64px)]">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-[calc(100%-64px)]">
           <TabsList className="w-full grid grid-cols-4 rounded-none border-b border-border">
             <TabsTrigger value="crewai">CrewAI</TabsTrigger>
             <TabsTrigger value="n8n">N8N</TabsTrigger>
@@ -61,7 +61,7 @@ export function ToolPanel() {
           </TabsContent>
 
           <TabsContent value="tools" className="h-full p-4 overflow-auto">
-            <ToolsPanel />
+            <ToolsSettings />
           </TabsContent>
         </Tabs>
       </div>
