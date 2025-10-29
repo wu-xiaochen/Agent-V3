@@ -187,10 +187,17 @@ async def chat_message(request: ChatMessage):
         logger.info(f"💬 处理消息: {request.message[:50]}...")
         response = agent.run(request.message)
         
+        # 确保 response 是字符串
+        if isinstance(response, dict):
+            # 如果是字典，提取 response 字段或转换为字符串
+            response_text = response.get('response', str(response))
+        else:
+            response_text = str(response)
+        
         return ChatResponse(
             success=True,
             session_id=session_id,
-            response=response,
+            response=response_text,
             metadata={"provider": request.provider, "model": request.model_name}
         )
         
