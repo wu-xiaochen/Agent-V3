@@ -9,6 +9,7 @@ interface AppState {
   currentTool: ToolType | null
   activeTab: string
   darkMode: boolean
+  sessionTitleGenerated: boolean  // 标记会话标题是否已生成
 
   setCurrentSession: (sessionId: string) => void
   addMessage: (message: Message) => void
@@ -19,6 +20,7 @@ interface AppState {
   setActiveTab: (tab: string) => void
   toggleDarkMode: () => void
   createNewSession: () => void
+  setSessionTitleGenerated: (generated: boolean) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -36,8 +38,9 @@ export const useAppStore = create<AppState>((set) => ({
   currentTool: null,
   activeTab: "crewai",
   darkMode: true,
+  sessionTitleGenerated: false,
 
-  setCurrentSession: (sessionId) => set({ currentSession: sessionId }),
+  setCurrentSession: (sessionId) => set({ currentSession: sessionId, sessionTitleGenerated: false }),
 
   addMessage: (message) => set((state) => ({ messages: [...state.messages, message] })),
 
@@ -46,7 +49,7 @@ export const useAppStore = create<AppState>((set) => ({
       messages: state.messages.map((msg) => (msg.id === id ? { ...msg, ...updates } : msg)),
     })),
 
-  clearMessages: () => set({ messages: [] }),
+  clearMessages: () => set({ messages: [], sessionTitleGenerated: false }),
 
   setToolPanelOpen: (open) => set({ toolPanelOpen: open }),
 
@@ -55,6 +58,8 @@ export const useAppStore = create<AppState>((set) => ({
   setActiveTab: (tab) => set({ activeTab: tab }),
 
   toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
+
+  setSessionTitleGenerated: (generated) => set({ sessionTitleGenerated: generated }),
 
   createNewSession: () =>
     set((state) => {
@@ -68,6 +73,7 @@ export const useAppStore = create<AppState>((set) => ({
         sessions: [...state.sessions, newSession],
         currentSession: newSession.id,
         messages: [],
+        sessionTitleGenerated: false,
       }
     }),
 }))

@@ -20,7 +20,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const [sessions, setSessions] = useState<Session[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const { currentSession, setCurrentSession, clearMessages, setToolPanelOpen, setActiveTab } = useAppStore()
+  const { currentSession, setCurrentSession, clearMessages, setToolPanelOpen, setActiveTab, messages, sessionTitleGenerated, setSessionTitleGenerated } = useAppStore()
 
   console.log("🔄 Sidebar Render - currentSession:", currentSession)
 
@@ -63,6 +63,27 @@ export function Sidebar() {
       is_active: s.session_id === currentSession
     })))
   }, [currentSession])
+
+  // 监听消息变化，自动生成会话标题（基于第一条用户消息）
+  useEffect(() => {
+    if (messages.length > 0 && !sessionTitleGenerated && currentSession) {
+      const firstUserMessage = messages.find(m => m.role === "user")
+      if (firstUserMessage) {
+        // 生成标题：截取第一条消息的前20个字符
+        const title = firstUserMessage.content.slice(0, 20) + (firstUserMessage.content.length > 20 ? "..." : "")
+        console.log("📝 Auto-generating session title:", title)
+        
+        // 更新本地会话标题
+        setSessions(prev => prev.map(s => 
+          s.session_id === currentSession 
+            ? { ...s, last_message: title }
+            : s
+        ))
+        
+        setSessionTitleGenerated(true)
+      }
+    }
+  }, [messages, sessionTitleGenerated, currentSession, setSessionTitleGenerated])
 
   // 创建新会话
   const handleNewSession = () => {
@@ -243,7 +264,7 @@ export function Sidebar() {
                 )} />
                 {!collapsed && (
                   <>
-                    <div className="flex-1 min-w-0 mr-1">
+                    <div className="flex-1 min-w-0 mr-8">
                       <p className={cn(
                         "text-sm truncate",
                         session.is_active ? "text-primary font-medium" : "text-sidebar-foreground"
@@ -258,7 +279,7 @@ export function Sidebar() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10"
+                      className="h-7 w-7 shrink-0 absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10"
                       onClick={(e) => handleDeleteSession(session.session_id, e)}
                     >
                       <Trash2 className="h-3.5 w-3.5 text-destructive" />
