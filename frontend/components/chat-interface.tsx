@@ -11,11 +11,12 @@ import { useAppStore } from "@/lib/store"
 import { MessageBubble } from "./message-bubble"
 import { Card } from "@/components/ui/card"
 
-// 工具调用状态组件
+// ✅ 修复：工具调用状态组件 - 正确的折叠逻辑
 function ToolCallStatus({ toolCalls, isThinking }: { toolCalls: any[]; isThinking: boolean }) {
   const [isExpanded, setIsExpanded] = useState(true)
 
-  if (toolCalls.length === 0 && !isThinking) return null
+  // ✅ 修复：正确的条件判断 - 只有在没有内容时才隐藏
+  if (!isThinking && toolCalls.length === 0) return null
 
   return (
     <Card className="p-3 my-2 bg-muted/50">
@@ -23,20 +24,24 @@ function ToolCallStatus({ toolCalls, isThinking }: { toolCalls: any[]; isThinkin
         <div className="flex items-center gap-2">
           {isThinking && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
           <span className="text-sm font-medium text-muted-foreground">
-            {isThinking ? "AI正在思考..." : "工具调用完成"}
+            {isThinking ? "🤔 AI正在思考..." : "✅ 工具调用完成"}
           </span>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
-          {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-        </Button>
+        {/* ✅ 修复：只在有工具调用时显示折叠按钮 */}
+        {toolCalls.length > 0 && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={() => setIsExpanded(!isExpanded)}
+          >
+            {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </Button>
+        )}
       </div>
 
-      {isExpanded && (
+      {/* ✅ 修复：只在展开且有工具调用时显示内容 */}
+      {isExpanded && toolCalls.length > 0 && (
         <div className="space-y-2 text-xs">
           {toolCalls.map((call, index) => (
             <div key={index} className="flex items-start gap-2 p-2 bg-background rounded">
@@ -67,31 +72,21 @@ export function ChatInterface() {
   const [abortController, setAbortController] = useState<AbortController | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
   const { messages, addMessage, currentSession } = useAppStore()
 
-  // 强制滚动到底部的函数
-  const scrollToBottom = () => {
-    if (scrollRef.current) {
-      const scrollElement = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]')
-      if (scrollElement) {
-        // 使用 scrollTop 强制滚动，不使用 smooth 避免动画问题
-        scrollElement.scrollTop = scrollElement.scrollHeight
-      }
-    }
-  }
-
-  // 监听消息和工具调用变化，自动滚动
+  // ✅ 修复：使用 scrollIntoView 确保滚动生效
   useEffect(() => {
-    // 多次尝试确保滚动成功
-    const timers = [
-      setTimeout(scrollToBottom, 0),
-      setTimeout(scrollToBottom, 50),
-      setTimeout(scrollToBottom, 100),
-      setTimeout(scrollToBottom, 200),
-    ]
-    
-    return () => timers.forEach(t => clearTimeout(t))
+    // 使用 requestAnimationFrame 确保 DOM 已完成渲染
+    requestAnimationFrame(() => {
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ 
+          behavior: 'smooth',
+          block: 'end'
+        })
+      }
+    })
   }, [messages, toolCalls, isThinking])
 
   const handleStop = () => {
@@ -116,11 +111,24 @@ export function ChatInterface() {
   const handleSend = async () => {
     if (!input.trim() || isLoading) return
 
+    // ✅ 修复：构建包含文档附件的消息
+    const attachments = uploadedFiles
+      .filter(f => f.status === 'success')
+      .map(f => ({
+        id: f.id,
+        name: f.file.name,
+        type: f.type,
+        url: f.url || '',
+        size: f.file.size,
+        parsed_content: f.parsed
+      }))
+
     const userMessage = {
       id: `msg-${Date.now()}`,
       role: "user" as const,
       content: input,
       timestamp: new Date(),
+      files: attachments.length > 0 ? attachments : undefined
     }
 
     addMessage(userMessage)
@@ -129,6 +137,9 @@ export function ChatInterface() {
     setIsLoading(true)
     setIsThinking(true)
     setToolCalls([])
+    
+    // ✅ 清空已上传的文件（发送后）
+    setUploadedFiles([])
 
     // 创建新的 AbortController
     const controller = new AbortController()
@@ -137,10 +148,11 @@ export function ChatInterface() {
     try {
       const { api } = await import("@/lib/api")
       
-      // 调用API
+      // ✅ 修复：调用API时携带附件信息
       console.log("🚀 Sending message:", {
         session: currentSession,
-        message: messageContent
+        message: messageContent,
+        attachments: attachments.length
       })
       
       const response = await api.chat.sendMessage(
@@ -149,6 +161,7 @@ export function ChatInterface() {
         {
           provider: "siliconflow",
           memory: true,
+          attachments: attachments  // ✅ 传递附件给后端
         }
       )
 
@@ -232,7 +245,7 @@ export function ChatInterface() {
         <p className="text-sm text-muted-foreground">Ask me anything about your AI agents</p>
       </div>
 
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
         <div className="max-w-4xl mx-auto space-y-4">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full text-center">
@@ -258,6 +271,9 @@ export function ChatInterface() {
               <span className="text-sm">AI is thinking...</span>
             </div>
           )}
+          
+          {/* ✅ 滚动锚点 - 确保自动滚动到最底部 */}
+          <div ref={messagesEndRef} className="h-1" />
         </div>
       </ScrollArea>
 

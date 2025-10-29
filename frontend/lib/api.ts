@@ -118,6 +118,7 @@ export const chatAPI = {
       provider?: string
       modelName?: string
       memory?: boolean
+      attachments?: FileAttachment[]  // ✅ 新增：支持附件
     }
   ): Promise<ChatMessageResponse> {
     const response = await apiClient.post<ChatMessageResponse>("/api/chat/message", {
@@ -127,6 +128,7 @@ export const chatAPI = {
       model_name: options?.modelName,
       memory: options?.memory !== false,
       streaming: false,
+      attachments: options?.attachments || []  // ✅ 传递附件
     })
     return response.data
   },

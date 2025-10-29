@@ -13,6 +13,11 @@ export interface FileAttachment {
   type: string
   url: string
   size: number
+  parsed_content?: {
+    type: string
+    summary: string
+    full_text: string
+  }
 }
 
 export interface ChatSession {

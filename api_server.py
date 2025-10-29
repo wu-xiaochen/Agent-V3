@@ -59,6 +59,16 @@ websocket_connections = {}  # session_id -> websocket
 
 # ==================== Pydantic 模型 ====================
 
+class FileAttachment(BaseModel):
+    """文件附件"""
+    id: str
+    name: str
+    type: str
+    url: str
+    size: int
+    parsed_content: Optional[Dict[str, Any]] = None
+
+
 class ChatMessage(BaseModel):
     """聊天消息"""
     session_id: str
@@ -67,6 +77,7 @@ class ChatMessage(BaseModel):
     model_name: Optional[str] = None
     memory: bool = True
     streaming: bool = False
+    attachments: List[FileAttachment] = []  # ✅ 新增：支持附件
 
 
 class ChatResponse(BaseModel):
@@ -188,6 +199,35 @@ async def chat_message(request: ChatMessage):
         else:
             agent = agent_instances[session_id]
         
+        # ✅ 修复：处理附件并构建增强的prompt
+        enhanced_message = request.message
+        
+        if request.attachments:
+            logger.info(f"📎 检测到 {len(request.attachments)} 个附件")
+            
+            # 将文档内容添加到消息中
+            context_parts = [request.message]
+            
+            for attachment in request.attachments:
+                if attachment.parsed_content:
+                    doc_context = f"\n\n[文档: {attachment.name}]"
+                    doc_context += f"\n文件类型: {attachment.parsed_content.get('type', 'unknown')}"
+                    doc_context += f"\n\n内容摘要:\n{attachment.parsed_content.get('summary', '')}"
+                    
+                    # 获取完整文本（限制长度以避免上下文过长）
+                    full_text = attachment.parsed_content.get('full_text', '')
+                    if full_text:
+                        # 限制文档内容长度为8000字符
+                        doc_context += f"\n\n完整内容:\n{full_text[:8000]}"
+                        if len(full_text) > 8000:
+                            doc_context += "\n...(内容已截断)"
+                    
+                    context_parts.append(doc_context)
+                    logger.info(f"📄 已添加文档上下文: {attachment.name} ({len(full_text)} 字符)")
+            
+            enhanced_message = "\n".join(context_parts)
+            logger.info(f"✅ 增强消息长度: {len(enhanced_message)} 字符")
+        
         # 处理消息
         logger.info(f"💬 处理消息: {request.message[:50]}...")
         
@@ -195,7 +235,7 @@ async def chat_message(request: ChatMessage):
         import time
         start_time = time.time()
         
-        response = agent.run(request.message)
+        response = agent.run(enhanced_message)  # ✅ 使用增强的消息
         
         # 计算执行时间
         execution_time = time.time() - start_time
