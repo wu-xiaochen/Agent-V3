@@ -19,16 +19,27 @@ export function ChatInterface() {
 
   // 自动滚动到底部
   useEffect(() => {
-    // 使用 setTimeout 确保 DOM 更新后再滚动
-    const timer = setTimeout(() => {
+    // 使用 requestAnimationFrame 确保 DOM 更新后再滚动
+    const scrollToBottom = () => {
       if (scrollRef.current) {
         const scrollElement = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]')
         if (scrollElement) {
-          scrollElement.scrollTop = scrollElement.scrollHeight
+          scrollElement.scrollTo({
+            top: scrollElement.scrollHeight,
+            behavior: 'smooth'
+          })
         }
       }
-    }, 100)
+    }
     
+    // 双重延迟确保滚动
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        scrollToBottom()
+      })
+    })
+    
+    const timer = setTimeout(scrollToBottom, 100)
     return () => clearTimeout(timer)
   }, [messages])
 

@@ -143,7 +143,7 @@ export function Sidebar() {
                 <MessageSquare className="h-4 w-4 shrink-0 text-sidebar-foreground" />
                 {!collapsed && (
                   <>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 mr-1">
                       <p className="text-sm text-sidebar-foreground truncate">{session.last_message}</p>
                       <p className="text-xs text-sidebar-muted-foreground">
                         {session.message_count} messages
@@ -152,10 +152,10 @@ export function Sidebar() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10"
                       onClick={(e) => handleDeleteSession(session.session_id, e)}
                     >
-                      <Trash2 className="h-3 w-3 text-destructive" />
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
                     </Button>
                   </>
                 )}
@@ -200,7 +200,7 @@ export function Sidebar() {
           variant="ghost" 
           className="w-full justify-start text-sidebar-foreground"
           onClick={() => {
-            setActiveTab("tools")
+            setActiveTab("settings")
             setToolPanelOpen(true)
           }}
         >

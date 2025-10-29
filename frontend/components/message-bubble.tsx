@@ -13,7 +13,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user"
 
   return (
-    <div className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}>
+    <div className={cn("flex gap-3 items-start", isUser ? "justify-end" : "justify-start")}>
       {!isUser && (
         <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
           <Bot className="h-4 w-4 text-primary-foreground" />
@@ -21,12 +21,12 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       )}
       <Card
         className={cn(
-          "max-w-[80%] p-4",
+          "max-w-[80%] px-4 py-3",
           isUser ? "bg-primary text-primary-foreground" : "bg-card text-card-foreground",
         )}
       >
         <div className="prose prose-sm dark:prose-invert max-w-none">
-          <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+          <p className="whitespace-pre-wrap leading-relaxed text-sm m-0">{message.content}</p>
         </div>
         {message.files && message.files.length > 0 && (
           <div className="mt-2 space-y-2">
