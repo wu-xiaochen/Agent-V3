@@ -40,7 +40,37 @@ export const useAppStore = create<AppState>((set) => ({
   darkMode: true,
   sessionTitleGenerated: false,
 
-  setCurrentSession: (sessionId) => set({ currentSession: sessionId, sessionTitleGenerated: false }),
+  setCurrentSession: (sessionId) => set((state) => {
+    // 在切换会话前，可以在这里保存当前会话的消息到localStorage
+    if (state.currentSession && state.messages.length > 0) {
+      const sessionData = {
+        sessionId: state.currentSession,
+        messages: state.messages,
+        timestamp: new Date().toISOString()
+      }
+      localStorage.setItem(`session_${state.currentSession}`, JSON.stringify(sessionData))
+      console.log(`💾 Saved session ${state.currentSession} with ${state.messages.length} messages`)
+    }
+    
+    // 尝试加载新会话的消息
+    const savedData = localStorage.getItem(`session_${sessionId}`)
+    let loadedMessages = []
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData)
+        loadedMessages = parsed.messages || []
+        console.log(`📥 Loaded session ${sessionId} with ${loadedMessages.length} messages`)
+      } catch (e) {
+        console.error("Failed to load session:", e)
+      }
+    }
+    
+    return { 
+      currentSession: sessionId, 
+      sessionTitleGenerated: false,
+      messages: loadedMessages
+    }
+  }),
 
   addMessage: (message) => set((state) => ({ messages: [...state.messages, message] })),
 

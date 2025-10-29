@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
-import { Send, Paperclip, Loader2, ChevronDown, ChevronUp } from "lucide-react"
+import { Send, Paperclip, Loader2, ChevronDown, ChevronUp, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -64,33 +64,53 @@ export function ChatInterface() {
   const [isLoading, setIsLoading] = useState(false)
   const [toolCalls, setToolCalls] = useState<any[]>([])
   const [isThinking, setIsThinking] = useState(false)
+  const [abortController, setAbortController] = useState<AbortController | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const { messages, addMessage, currentSession } = useAppStore()
 
-  // 自动滚动到底部
-  useEffect(() => {
-    const scrollToBottom = () => {
-      if (scrollRef.current) {
-        const scrollElement = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]')
-        if (scrollElement) {
-          scrollElement.scrollTo({
-            top: scrollElement.scrollHeight,
-            behavior: 'smooth'
-          })
-        }
+  // 强制滚动到底部的函数
+  const scrollToBottom = () => {
+    if (scrollRef.current) {
+      const scrollElement = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]')
+      if (scrollElement) {
+        // 使用 scrollTop 强制滚动，不使用 smooth 避免动画问题
+        scrollElement.scrollTop = scrollElement.scrollHeight
       }
     }
+  }
+
+  // 监听消息和工具调用变化，自动滚动
+  useEffect(() => {
+    // 多次尝试确保滚动成功
+    const timers = [
+      setTimeout(scrollToBottom, 0),
+      setTimeout(scrollToBottom, 50),
+      setTimeout(scrollToBottom, 100),
+      setTimeout(scrollToBottom, 200),
+    ]
     
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        scrollToBottom()
-      })
-    })
-    
-    const timer = setTimeout(scrollToBottom, 100)
-    return () => clearTimeout(timer)
-  }, [messages, toolCalls])
+    return () => timers.forEach(t => clearTimeout(t))
+  }, [messages, toolCalls, isThinking])
+
+  const handleStop = () => {
+    if (abortController) {
+      console.log("🛑 Stopping AI execution...")
+      abortController.abort()
+      setAbortController(null)
+      setIsLoading(false)
+      setIsThinking(false)
+      setToolCalls([])
+      
+      const stopMessage = {
+        id: `msg-${Date.now()}-stop`,
+        role: "assistant" as const,
+        content: "⚠️ 任务已被用户停止",
+        timestamp: new Date(),
+      }
+      addMessage(stopMessage)
+    }
+  }
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return
@@ -108,6 +128,10 @@ export function ChatInterface() {
     setIsLoading(true)
     setIsThinking(true)
     setToolCalls([])
+
+    // 创建新的 AbortController
+    const controller = new AbortController()
+    setAbortController(controller)
 
     try {
       const { api } = await import("@/lib/api")
@@ -189,6 +213,7 @@ export function ChatInterface() {
       addMessage(errorMessage)
     } finally {
       setIsLoading(false)
+      setAbortController(null)
     }
   }
 
@@ -297,14 +322,26 @@ export function ChatInterface() {
               className="min-h-[44px] max-h-[120px] resize-none"
               rows={1}
             />
-            <Button
-              onClick={handleSend}
-              disabled={!input.trim() || isLoading}
-              className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
-              size="icon"
-            >
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </Button>
+            {isLoading ? (
+              <Button
+                onClick={handleStop}
+                className="shrink-0 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                size="icon"
+                title="停止执行"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                onClick={handleSend}
+                disabled={!input.trim()}
+                className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
+                size="icon"
+                title="发送消息"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
       </div>
