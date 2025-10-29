@@ -65,6 +65,7 @@ export function ChatInterface() {
   const [toolCalls, setToolCalls] = useState<any[]>([])
   const [isThinking, setIsThinking] = useState(false)
   const [abortController, setAbortController] = useState<AbortController | null>(null)
+  const [uploadedFiles, setUploadedFiles] = useState<any[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const { messages, addMessage, currentSession } = useAppStore()
@@ -261,57 +262,123 @@ export function ChatInterface() {
       </ScrollArea>
 
       <div className="border-t border-border p-4 bg-card">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto space-y-2">
+          {/* 文件附件预览 - 类似 Cursor 的简洁设计 */}
+          {uploadedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-2 pb-2">
+              {uploadedFiles.map((file) => (
+                <div
+                  key={file.id}
+                  className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-muted rounded-md text-sm"
+                >
+                  {file.type === 'image' && file.preview ? (
+                    <img src={file.preview} alt="" className="w-5 h-5 rounded object-cover" />
+                  ) : (
+                    <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                  <span className="text-xs font-medium truncate max-w-[150px]">{file.file.name}</span>
+                  {file.status === 'uploading' && <Loader2 className="h-3 w-3 animate-spin" />}
+                  {file.status === 'success' && <span className="text-green-500 text-xs">✓</span>}
+                  {file.status === 'error' && <span className="text-red-500 text-xs">✗</span>}
+                  <button
+                    onClick={() => {
+                      const newFiles = uploadedFiles.filter(f => f.id !== file.id)
+                      setUploadedFiles(newFiles)
+                    }}
+                    className="hover:bg-background rounded p-0.5"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          
           <div className="flex items-end gap-2">
             <input
               type="file"
               ref={fileInputRef}
               className="hidden"
               multiple
+              accept="image/*,.pdf,.doc,.docx,.txt,.md"
               onChange={async (e) => {
-                const files = e.target.files
-                if (!files || files.length === 0) return
+                const files = Array.from(e.target.files || [])
+                if (files.length === 0) return
 
-                setIsLoading(true)
+                // 添加到待上传列表
+                const newFiles = files.map(file => ({
+                  id: `file-${Date.now()}-${Math.random()}`,
+                  file,
+                  type: file.type.startsWith('image/') ? 'image' as const : 'document' as const,
+                  status: 'uploading' as const,
+                  preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
+                }))
+                
+                setUploadedFiles(prev => [...prev, ...newFiles])
+
+                // 上传文件
                 try {
                   const { api } = await import("@/lib/api")
-                  const uploadPromises = Array.from(files).map((file) =>
-                    api.files.uploadFile(file, {
-                      fileType: file.type.startsWith("image/") ? "image" : "data",
-                    })
-                  )
+                  
+                  for (const uploadFile of newFiles) {
+                    try {
+                      const result = await api.files.uploadFile(uploadFile.file, {
+                        fileType: uploadFile.type
+                      })
 
-                  const results = await Promise.all(uploadPromises)
-                  const successCount = results.filter((r) => r.success).length
-
-                  const systemMessage = {
-                    id: `msg-${Date.now()}-system`,
-                    role: "assistant" as const,
-                    content: `✅ 成功上传 ${successCount} 个文件。\n\n${results
-                      .filter((r) => r.success)
-                      .map((r) => `📄 ${r.filename} (${(r.size / 1024).toFixed(1)} KB)\n下载链接: ${r.download_url}`)
-                      .join("\n\n")}`,
-                    timestamp: new Date(),
+                      if (result.success) {
+                        setUploadedFiles(prev =>
+                          prev.map(f =>
+                            f.id === uploadFile.id
+                              ? { 
+                                  ...f, 
+                                  status: 'success' as const, 
+                                  url: result.download_url,
+                                  parsed: result.parsed_content
+                                }
+                              : f
+                          )
+                        )
+                        
+                        // 如果文档解析成功，显示解析结果
+                        if (result.parsed_content) {
+                          const parsedMessage = {
+                            id: `msg-${Date.now()}-parsed`,
+                            role: "assistant" as const,
+                            content: `📄 **${result.filename}** 解析成功！\n\n` +
+                                   `**类型**: ${result.parsed_content.type}\n\n` +
+                                   `**内容摘要**:\n${result.parsed_content.summary}\n\n` +
+                                   `💡 您可以在对话中引用这个文档的内容。`,
+                            timestamp: new Date(),
+                          }
+                          addMessage(parsedMessage)
+                        }
+                      } else {
+                        throw new Error(result.error || 'Upload failed')
+                      }
+                    } catch (error) {
+                      console.error("文件上传失败:", error)
+                      setUploadedFiles(prev =>
+                        prev.map(f =>
+                          f.id === uploadFile.id ? { ...f, status: 'error' as const } : f
+                        )
+                      )
+                    }
                   }
-                  addMessage(systemMessage)
-                } catch (error) {
-                  console.error("文件上传失败:", error)
-                  const errorMessage = {
-                    id: `msg-${Date.now()}-error`,
-                    role: "assistant" as const,
-                    content: "❌ 文件上传失败，请稍后重试。",
-                    timestamp: new Date(),
-                  }
-                  addMessage(errorMessage)
                 } finally {
-                  setIsLoading(false)
                   if (fileInputRef.current) {
                     fileInputRef.current.value = ""
                   }
                 }
               }}
             />
-            <Button variant="outline" size="icon" onClick={() => fileInputRef.current?.click()} className="shrink-0">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => fileInputRef.current?.click()} 
+              className="shrink-0"
+              title="上传文件"
+            >
               <Paperclip className="h-4 w-4" />
             </Button>
             <Textarea

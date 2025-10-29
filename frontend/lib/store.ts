@@ -58,7 +58,10 @@ export const useAppStore = create<AppState>((set) => ({
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData)
-        loadedMessages = parsed.messages || []
+        loadedMessages = (parsed.messages || []).map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)  // 确保时间戳是Date对象
+        }))
         console.log(`📥 Loaded session ${sessionId} with ${loadedMessages.length} messages`)
       } catch (e) {
         console.error("Failed to load session:", e)

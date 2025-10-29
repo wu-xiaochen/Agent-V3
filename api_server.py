@@ -472,7 +472,7 @@ async def upload_file(
     tags: Optional[str] = Form(None)
 ):
     """
-    上传文件
+    上传文件并解析内容
     
     Args:
         file: 上传的文件
@@ -480,7 +480,7 @@ async def upload_file(
         tags: 标签（逗号分隔）
         
     Returns:
-        文件信息
+        文件信息和解析结果
     """
     try:
         # 读取文件内容
@@ -499,22 +499,55 @@ async def upload_file(
             tags=tag_list
         )
         
-        if result["success"]:
-            return FileUploadResponse(
-                success=True,
-                file_id=result["file_id"],
-                filename=result["filename"],
-                download_url=result["download_url"],
-                size=result["size"],
-                message="文件上传成功"
-            )
-        else:
+        if not result["success"]:
             raise HTTPException(status_code=500, detail=result.get("error", "文件上传失败"))
+        
+        # 尝试解析文档内容
+        parsed_content = None
+        file_path = result.get("path")
+        
+        if file_path and Path(file_path).exists():
+            try:
+                from src.infrastructure.multimodal.document_parser import parse_document
+                
+                # 解析文档
+                parse_result = parse_document(file_path)
+                
+                if parse_result.get("success"):
+                    parsed_content = {
+                        "type": parse_result.get("type"),
+                        "summary": parse_result.get("summary") or parse_result.get("full_text", "")[:500],
+                        "full_text": parse_result.get("full_text") or parse_result.get("content", "")
+                    }
+                    logger.info(f"📄 文档解析成功: {file.filename}")
+                else:
+                    logger.warning(f"⚠️  文档解析失败: {parse_result.get('error')}")
+                    
+            except Exception as e:
+                logger.warning(f"⚠️  文档解析失败: {e}")
+        
+        response_data = {
+            "success": True,
+            "file_id": result["file_id"],
+            "filename": result["filename"],
+            "download_url": result["download_url"],
+            "size": result["size"],
+            "message": "文件上传成功"
+        }
+        
+        # 添加解析内容到响应
+        if parsed_content:
+            response_data["parsed_content"] = parsed_content
+            response_data["message"] = "文件上传并解析成功"
+        
+        return response_data
             
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"❌ 文件上传失败: {e}")
+        import traceback
+        logger.debug(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
