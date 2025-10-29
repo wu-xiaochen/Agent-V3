@@ -9,9 +9,10 @@ import { CrewAIVisualizer } from "./crewai-visualizer"
 import { KnowledgeBrowser } from "./knowledge-browser"
 import { ToolsSettings } from "./tools-settings"
 import { SystemSettings } from "./system-settings"
+import { ToolCallHistory } from "./tool-call-history"
 
 export function ToolPanel() {
-  const { toolPanelOpen, setToolPanelOpen, activeTab, setActiveTab } = useAppStore()
+  const { toolPanelOpen, setToolPanelOpen, activeTab, setActiveTab, currentSession } = useAppStore()
 
   return (
     <>
@@ -62,9 +63,12 @@ export function ToolPanel() {
             <KnowledgeBrowser />
           </TabsContent>
 
-          <TabsContent value="tools" className="h-full p-4 overflow-auto">
-            <ToolsSettings />
-          </TabsContent>
+            <TabsContent value="tools" className="h-full p-4 overflow-auto">
+              <div className="space-y-4">
+                <ToolsSettings />
+                <ToolCallHistory sessionId={currentSession || undefined} />
+              </div>
+            </TabsContent>
 
           <TabsContent value="settings" className="h-full p-4 overflow-auto">
             <SystemSettings />

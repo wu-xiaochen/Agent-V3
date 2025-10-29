@@ -20,6 +20,7 @@ from src.agents.unified.unified_agent import UnifiedAgent
 from src.interfaces.file_manager import get_file_manager
 from src.infrastructure.tools import get_tool_registry
 from src.config.config_loader import config_loader
+from api_enhancements import get_enhanced_router, record_tool_call
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -45,6 +46,10 @@ app.add_middleware(
 outputs_dir = Path("outputs")
 outputs_dir.mkdir(exist_ok=True)
 # app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
+
+# 注册增强路由
+enhanced_router = get_enhanced_router()
+app.include_router(enhanced_router)
 
 # 全局变量
 file_manager = None
@@ -185,7 +190,16 @@ async def chat_message(request: ChatMessage):
         
         # 处理消息
         logger.info(f"💬 处理消息: {request.message[:50]}...")
+        
+        # 记录工具调用开始时间
+        import time
+        start_time = time.time()
+        
         response = agent.run(request.message)
+        
+        # 计算执行时间
+        execution_time = time.time() - start_time
+        logger.info(f"⏱️  执行时间: {execution_time:.2f}s")
         
         # 确保 response 是字符串
         if isinstance(response, dict):

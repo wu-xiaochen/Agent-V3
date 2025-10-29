@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useAppStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import { api } from "@/lib/api"
+import { SessionTitleEditor } from "./session-title-editor"
 
 interface Session {
   session_id: string
@@ -191,6 +192,28 @@ export function Sidebar() {
     loadSessionsFromBackend()
   }
 
+  // 保存会话标题
+  const handleSaveTitle = async (sessionId: string, newTitle: string) => {
+    console.log("💾 Saving session title:", sessionId, newTitle)
+    
+    try {
+      // TODO: 调用后端API保存标题
+      // await api.chat.updateSession(sessionId, { title: newTitle })
+      
+      // 更新本地状态
+      setSessions(prev => prev.map(s => 
+        s.session_id === sessionId 
+          ? { ...s, last_message: newTitle }
+          : s
+      ))
+      
+      console.log("✅ Session title saved")
+    } catch (error) {
+      console.error("❌ Failed to save session title:", error)
+      alert("保存会话标题失败，请重试")
+    }
+  }
+
   return (
     <div
       className={cn(
@@ -265,13 +288,14 @@ export function Sidebar() {
                 {!collapsed && (
                   <>
                     <div className="flex-1 min-w-0 mr-8">
-                      <p className={cn(
-                        "text-sm truncate",
-                        session.is_active ? "text-primary font-medium" : "text-sidebar-foreground"
-                      )}>
-                        {session.last_message}
-                        {session.is_local && " (新建)"}
-                      </p>
+                      <SessionTitleEditor
+                        sessionId={session.session_id}
+                        title={session.last_message + (session.is_local ? " (新建)" : "")}
+                        onSave={handleSaveTitle}
+                        className={cn(
+                          session.is_active ? "text-primary font-medium" : "text-sidebar-foreground"
+                        )}
+                      />
                       <p className="text-xs text-sidebar-muted-foreground">
                         {session.message_count} messages
                       </p>
