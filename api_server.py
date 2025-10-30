@@ -1615,10 +1615,37 @@ async def execute_crew_stream(crew_id: str, request: CrewExecutionRequest = Crew
             yield f"data: {json.dumps({'type': 'status', 'message': '创建Crew实例...', 'timestamp': datetime.now().isoformat()})}\n\n"
             await asyncio.sleep(0.1)
             
+            # 🆕 支持不同的Process类型
+            process_type = crew_config.get("process", "sequential").lower()
+            process_mapping = {
+                "sequential": Process.sequential,
+                "hierarchical": Process.hierarchical
+            }
+            process = process_mapping.get(process_type, Process.sequential)
+            
+            # 🆕 Hierarchical需要Manager配置
+            manager_llm = None
+            if process_type == "hierarchical":
+                # 使用系统配置的LLM作为Manager
+                from src.services.system_config_service import SystemConfigService
+                sys_config_service = SystemConfigService()
+                sys_config = sys_config_service.load_config()
+                
+                from langchain_openai import ChatOpenAI
+                manager_llm = ChatOpenAI(
+                    model=sys_config.default_model,
+                    api_key=sys_config.api_key,
+                    base_url=sys_config.base_url,
+                    temperature=sys_config.temperature
+                )
+                
+                yield f"data: {json.dumps({'type': 'log', 'message': '🎯 使用Hierarchical模式，Manager LLM已配置', 'log_type': 'info', 'timestamp': datetime.now().isoformat()})}\n\n"
+            
             crew = Crew(
                 agents=agents,
                 tasks=tasks,
-                process=Process.sequential,
+                process=process,
+                manager_llm=manager_llm,  # 🆕 仅Hierarchical需要
                 verbose=True
             )
             

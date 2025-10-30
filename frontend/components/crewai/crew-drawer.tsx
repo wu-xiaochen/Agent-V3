@@ -495,6 +495,30 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
                               />
                             </div>
 
+                            {/* 🆕 Process Type选择器 */}
+                            <div>
+                              <Label>Process Type</Label>
+                              <select
+                                value={selectedCrew.process || "sequential"}
+                                onChange={(e) =>
+                                  setSelectedCrew({
+                                    ...selectedCrew,
+                                    process: e.target.value as "sequential" | "hierarchical",
+                                  })
+                                }
+                                className="w-full px-3 py-2 border rounded-md bg-background"
+                              >
+                                <option value="sequential">Sequential</option>
+                                <option value="hierarchical">Hierarchical</option>
+                              </select>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {selectedCrew.process === "hierarchical" 
+                                  ? "🎯 Manager will coordinate tasks and delegate to agents"
+                                  : "📋 Tasks execute in order, one after another"
+                                }
+                              </p>
+                            </div>
+
                             <Separator />
 
                             <div>
