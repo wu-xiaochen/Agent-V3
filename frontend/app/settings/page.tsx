@@ -1,138 +1,95 @@
 "use client"
 
 import { useState } from "react"
-import { Settings, User, Wrench, Database, Palette, ArrowLeft } from "lucide-react"
-import Link from "next/link"
+import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AgentSettings } from "@/components/settings/agent-settings"
 import { ToolSettings } from "@/components/settings/tool-settings"
 import { SystemSettings } from "@/components/settings/system-settings"
 import { KnowledgeBaseSettings } from "@/components/settings/knowledge-base-settings"
 import { AppearanceSettings } from "@/components/settings/appearance-settings"
+import Link from "next/link"
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("agents")
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b bg-card">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center gap-4">
-            <Link href="/">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-            </Link>
-            <div className="flex-1">
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <Settings className="h-6 w-6" />
-                Settings
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Manage your agents, tools, and system configuration
-              </p>
-            </div>
+      <div className="container max-w-6xl mx-auto py-8 px-4">
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-8">
+          <Link href="/">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-3xl font-bold">Settings</h1>
+            <p className="text-muted-foreground mt-1">
+              Configure your AI agents, tools, and system preferences
+            </p>
           </div>
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="container mx-auto px-6 py-8">
+        {/* Settings Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 lg:w-[600px]">
-            <TabsTrigger value="agents" className="flex items-center gap-2">
-              <User className="h-4 w-4" />
-              <span className="hidden sm:inline">Agents</span>
-            </TabsTrigger>
-            <TabsTrigger value="tools" className="flex items-center gap-2">
-              <Wrench className="h-4 w-4" />
-              <span className="hidden sm:inline">Tools</span>
-            </TabsTrigger>
-            <TabsTrigger value="system" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              <span className="hidden sm:inline">System</span>
-            </TabsTrigger>
-            <TabsTrigger value="knowledge" className="flex items-center gap-2">
-              <Database className="h-4 w-4" />
-              <span className="hidden sm:inline">Knowledge</span>
-            </TabsTrigger>
-            <TabsTrigger value="appearance" className="flex items-center gap-2">
-              <Palette className="h-4 w-4" />
-              <span className="hidden sm:inline">Appearance</span>
-            </TabsTrigger>
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="agents">Agents</TabsTrigger>
+            <TabsTrigger value="tools">Tools</TabsTrigger>
+            <TabsTrigger value="system">System</TabsTrigger>
+            <TabsTrigger value="knowledge">Knowledge</TabsTrigger>
+            <TabsTrigger value="appearance">Appearance</TabsTrigger>
           </TabsList>
 
           <TabsContent value="agents" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Agent Configuration</CardTitle>
-                <CardDescription>
-                  Manage your AI agents, edit prompts, and create new agents
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <AgentSettings />
-              </CardContent>
-            </Card>
+            <div>
+              <h2 className="text-2xl font-semibold mb-2">Agent Configuration</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                Manage AI agents, customize their prompts and behaviors
+              </p>
+            </div>
+            <AgentSettings />
           </TabsContent>
 
           <TabsContent value="tools" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Tool Configuration</CardTitle>
-                <CardDescription>
-                  Enable/disable tools, configure parameters, and manage MCP connections
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ToolSettings />
-              </CardContent>
-            </Card>
+            <div>
+              <h2 className="text-2xl font-semibold mb-2">Tool Configuration</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                Enable, disable, and configure tools available to your agents
+              </p>
+            </div>
+            <ToolSettings />
           </TabsContent>
 
           <TabsContent value="system" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>System Settings</CardTitle>
-                <CardDescription>
-                  Configure LLM providers, API keys, and model parameters
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <SystemSettings />
-              </CardContent>
-            </Card>
+            <div>
+              <h2 className="text-2xl font-semibold mb-2">System Configuration</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                Configure LLM providers, API keys, and default model parameters
+              </p>
+            </div>
+            <SystemSettings />
           </TabsContent>
 
           <TabsContent value="knowledge" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Knowledge Base</CardTitle>
-                <CardDescription>
-                  Manage knowledge bases, upload documents, and configure vector storage
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <KnowledgeBaseSettings />
-              </CardContent>
-            </Card>
+            <div>
+              <h2 className="text-2xl font-semibold mb-2">Knowledge Base</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                Manage knowledge bases and RAG capabilities
+              </p>
+            </div>
+            <KnowledgeBaseSettings />
           </TabsContent>
 
           <TabsContent value="appearance" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Appearance</CardTitle>
-                <CardDescription>
-                  Customize theme, font size, and language preferences
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <AppearanceSettings />
-              </CardContent>
-            </Card>
+            <div>
+              <h2 className="text-2xl font-semibold mb-2">Appearance & Display</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                Customize the look and feel of your workspace
+              </p>
+            </div>
+            <AppearanceSettings />
           </TabsContent>
         </Tabs>
       </div>
