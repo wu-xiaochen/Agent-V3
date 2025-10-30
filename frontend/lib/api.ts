@@ -491,6 +491,9 @@ export const healthAPI = {
 }
 
 // 导出所有 API
+// 导入系统配置API
+import { systemApi } from './api/system'
+
 export const api = {
   chat: chatAPI,
   files: filesAPI,
@@ -499,6 +502,7 @@ export const api = {
   knowledge: knowledgeAPI,
   crewai: crewaiAPI,
   health: healthAPI,
+  system: systemApi,  // 🆕 系统配置API
 }
 
 export default api

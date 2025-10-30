@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card } from "@/components/ui/card"
 import { Save, Eye, EyeOff } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { api } from "@/lib/api"
 
 interface SystemConfig {
   llmProvider: string
@@ -61,16 +62,31 @@ export function SystemSettings() {
   const [hasChanges, setHasChanges] = useState(false)
   const { toast } = useToast()
 
-  // 加载保存的配置
+  // 从后端加载配置
   useEffect(() => {
-    const saved = localStorage.getItem("system_config")
-    if (saved) {
+    const loadConfig = async () => {
       try {
-        setConfig(JSON.parse(saved))
+        const response = await api.system.getConfig()
+        if (response.success) {
+          // 转换API响应为组件配置
+          const backendConfig = response.config
+          setConfig({
+            llmProvider: backendConfig.llm_provider,
+            apiKey: "", // 不显示实际key，只在用户输入时更新
+            baseUrl: backendConfig.base_url,
+            defaultModel: backendConfig.default_model,
+            temperature: backendConfig.temperature,
+            maxTokens: backendConfig.max_tokens
+          })
+          console.log("✅ 从后端加载配置成功")
+        }
       } catch (e) {
-        console.error("Failed to load system config:", e)
+        console.error("从后端加载配置失败:", e)
+        // 失败时使用默认配置
+        setConfig(DEFAULT_CONFIG)
       }
     }
+    loadConfig()
   }, [])
 
   const handleChange = (key: keyof SystemConfig, value: any) => {
@@ -89,22 +105,77 @@ export function SystemSettings() {
     setHasChanges(true)
   }
 
-  const handleSave = () => {
-    localStorage.setItem("system_config", JSON.stringify(config))
-    setHasChanges(false)
-    toast({ 
-      title: "Settings saved",
-      description: "System configuration has been updated"
-    })
+  const handleSave = async () => {
+    try {
+      // 准备更新数据（将组件配置转换为API格式）
+      const updateData: any = {
+        llm_provider: config.llmProvider,
+        base_url: config.baseUrl,
+        default_model: config.defaultModel,
+        temperature: config.temperature,
+        max_tokens: config.maxTokens
+      }
+      
+      // 只有用户输入了新的API Key才更新
+      if (config.apiKey) {
+        updateData.api_key = config.apiKey
+      }
+      
+      // 调用后端API
+      const response = await api.system.updateConfig(updateData)
+      
+      if (response.success) {
+        setHasChanges(false)
+        toast({ 
+          title: "Settings saved",
+          description: "System configuration has been updated"
+        })
+        
+        // 清空API Key输入框（安全考虑）
+        setConfig({ ...config, apiKey: "" })
+        console.log("✅ 配置保存到后端成功")
+      }
+    } catch (e) {
+      console.error("保存配置失败:", e)
+      toast({ 
+        title: "Save failed",
+        description: "Failed to save configuration. Please try again.",
+        variant: "destructive"
+      })
+    }
   }
 
-  const handleReset = () => {
-    setConfig(DEFAULT_CONFIG)
-    setHasChanges(true)
-    toast({ 
-      title: "Settings reset",
-      description: "Configuration reset to defaults"
-    })
+  const handleReset = async () => {
+    try {
+      // 调用后端重置API
+      const response = await api.system.resetConfig()
+      
+      if (response.success) {
+        // 更新本地状态
+        const backendConfig = response.config
+        setConfig({
+          llmProvider: backendConfig.llm_provider,
+          apiKey: "",
+          baseUrl: backendConfig.base_url,
+          defaultModel: backendConfig.default_model,
+          temperature: backendConfig.temperature,
+          maxTokens: backendConfig.max_tokens
+        })
+        setHasChanges(false)
+        toast({ 
+          title: "Settings reset",
+          description: "Configuration reset to defaults"
+        })
+        console.log("✅ 配置重置成功")
+      }
+    } catch (e) {
+      console.error("重置配置失败:", e)
+      toast({ 
+        title: "Reset failed",
+        description: "Failed to reset configuration. Please try again.",
+        variant: "destructive"
+      })
+    }
   }
 
   const currentProvider = PROVIDER_CONFIGS[config.llmProvider as keyof typeof PROVIDER_CONFIGS]
