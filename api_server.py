@@ -1546,12 +1546,17 @@ async def execute_crew_stream(crew_id: str, request: CrewExecutionRequest = Crew
                                         "type": parse_result.get("type", "unknown"),
                                         "content": content
                                     }
-                                    yield f"data: {json.dumps({'type': 'log', 'message': f'✅ 已加载文件: {file_info.get(\"filename\")} ({len(content)} 字符)', 'log_type': 'success', 'timestamp': datetime.now().isoformat()})}\n\n"
+                                    filename = file_info.get("filename")
+                                    log_msg = f'✅ 已加载文件: {filename} ({len(content)} 字符)'
+                                    yield f"data: {json.dumps({'type': 'log', 'message': log_msg, 'log_type': 'success', 'timestamp': datetime.now().isoformat()})}\n\n"
                                 else:
-                                    yield f"data: {json.dumps({'type': 'log', 'message': f'⚠️ 文件解析失败: {file_info.get(\"filename\")}', 'log_type': 'warning', 'timestamp': datetime.now().isoformat()})}\n\n"
+                                    filename = file_info.get("filename")
+                                    log_msg = f'⚠️ 文件解析失败: {filename}'
+                                    yield f"data: {json.dumps({'type': 'log', 'message': log_msg, 'log_type': 'warning', 'timestamp': datetime.now().isoformat()})}\n\n"
                     except Exception as e:
                         logger.warning(f"文件加载失败 {file_id}: {e}")
-                        yield f"data: {json.dumps({'type': 'log', 'message': f'❌ 文件加载错误: {str(e)}', 'log_type': 'error', 'timestamp': datetime.now().isoformat()})}\n\n"
+                        log_msg = f'❌ 文件加载错误: {str(e)}'
+                        yield f"data: {json.dumps({'type': 'log', 'message': log_msg, 'log_type': 'error', 'timestamp': datetime.now().isoformat()})}\n\n"
                 
                 # 将文件内容添加到inputs中
                 if file_contents:
