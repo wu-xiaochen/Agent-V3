@@ -1019,15 +1019,21 @@ Thought:{agent_scratchpad}"""
                             }
                         }
                     
-                    # 处理observation
-                    obs_info = f"📊 结果: {str(observation)}\n"
+                    # 处理observation - 确保dict类型正确转换为JSON
+                    if isinstance(observation, dict):
+                        import json
+                        obs_str = json.dumps(observation, ensure_ascii=False)
+                    else:
+                        obs_str = str(observation)
+                    obs_info = f"📊 结果: {obs_str}\n"
                     yield {
                         "response": obs_info,
                         "metadata": {
                             "query": query,
                             "agent_type": "unified",
                             "session_id": self.session_id,
-                            "is_intermediate_step": True
+                            "is_intermediate_step": True,
+                            "observation": observation  # 直接传递原始observation给前端
                         }
                     }
                 elif hasattr(step, "action") and hasattr(step, "observation"):
@@ -1048,15 +1054,21 @@ Thought:{agent_scratchpad}"""
                         }
                     }
                     
-                    # 输出观察结果
-                    obs_info = f"📊 结果: {observation}\n"
+                    # 输出观察结果 - 确保dict类型正确转换为JSON
+                    if isinstance(observation, dict):
+                        import json
+                        obs_str = json.dumps(observation, ensure_ascii=False)
+                    else:
+                        obs_str = str(observation)
+                    obs_info = f"📊 结果: {obs_str}\n"
                     yield {
                         "response": obs_info,
                         "metadata": {
                             "query": query,
                             "agent_type": "unified",
                             "session_id": self.session_id,
-                            "is_intermediate_step": True
+                            "is_intermediate_step": True,
+                            "observation": observation  # 直接传递原始observation给前端
                         }
                     }
                 else:
