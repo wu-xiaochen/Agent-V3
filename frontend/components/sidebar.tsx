@@ -376,8 +376,19 @@ export function Sidebar() {
         )}
       </ScrollArea>
 
-      {/* 底部设置按钮 */}
-      <div className="p-3 border-t border-sidebar-border">
+      {/* 底部按钮 */}
+      <div className="p-3 border-t border-sidebar-border space-y-1">
+        <Button 
+          variant="ghost" 
+          className="w-full justify-start text-sidebar-foreground"
+          onClick={() => {
+            setToolPanelOpen(true)
+          }}
+        >
+          <Database className="h-4 w-4" />
+          {!collapsed && <span className="ml-2 text-sm">Tools</span>}
+        </Button>
+        
         <Link href="/settings" className="w-full">
           <Button 
             variant="ghost" 

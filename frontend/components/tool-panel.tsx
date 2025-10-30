@@ -16,16 +16,6 @@ export function ToolPanel() {
 
   return (
     <>
-      {!toolPanelOpen && (
-        <Button
-          onClick={() => setToolPanelOpen(true)}
-          className="fixed right-4 top-4 z-50 bg-primary text-primary-foreground hover:bg-primary/90"
-          size="icon"
-        >
-          <Menu className="h-4 w-4" />
-        </Button>
-      )}
-
       <div
         className={cn(
           "fixed right-0 top-0 h-screen w-[400px] bg-card border-l border-border shadow-2xl transition-transform duration-300 z-40",
@@ -40,8 +30,7 @@ export function ToolPanel() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-[calc(100%-64px)]">
-          <TabsList className="w-full grid grid-cols-5 rounded-none border-b border-border">
-            <TabsTrigger value="crewai">CrewAI</TabsTrigger>
+          <TabsList className="w-full grid grid-cols-4 rounded-none border-b border-border">
             <TabsTrigger value="n8n">N8N</TabsTrigger>
             <TabsTrigger value="knowledge">Knowledge</TabsTrigger>
             <TabsTrigger value="tools">Tools</TabsTrigger>

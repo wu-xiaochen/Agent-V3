@@ -410,24 +410,66 @@ export const knowledgeAPI = {
 
 export const crewaiAPI = {
   /**
-   * 创建 CrewAI 配置 (TODO: 需要后端实现)
+   * 创建或保存Crew配置
    */
-  async createCrew(config: any): Promise<any> {
-    throw new Error("Not implemented yet")
+  async saveCrew(crew: any): Promise<{ success: boolean; crew_id: string; message: string }> {
+    const response = await apiClient.post("/api/crewai/crews", crew)
+    return response.data
   },
 
   /**
-   * 运行 CrewAI (TODO: 需要后端实现)
+   * 获取所有Crew列表
    */
-  async runCrew(crewId: string, query: string): Promise<any> {
-    throw new Error("Not implemented yet")
+  async listCrews(): Promise<{ 
+    success: boolean
+    crews: Array<{
+      id: string
+      name: string
+      description: string
+      agentCount: number
+      taskCount: number
+      createdAt: string
+      updatedAt: string
+    }>
+  }> {
+    const response = await apiClient.get("/api/crewai/crews")
+    return response.data
   },
 
   /**
-   * 获取 CrewAI 状态 (TODO: 需要后端实现)
+   * 获取单个Crew的详细信息
    */
-  async getStatus(crewId: string): Promise<any> {
-    throw new Error("Not implemented yet")
+  async getCrew(crewId: string): Promise<{ success: boolean; crew: any }> {
+    const response = await apiClient.get(`/api/crewai/crews/${crewId}`)
+    return response.data
+  },
+
+  /**
+   * 更新Crew配置
+   */
+  async updateCrew(crewId: string, crew: any): Promise<{ success: boolean; message: string }> {
+    const response = await apiClient.put(`/api/crewai/crews/${crewId}`, crew)
+    return response.data
+  },
+
+  /**
+   * 删除Crew
+   */
+  async deleteCrew(crewId: string): Promise<{ success: boolean; message: string }> {
+    const response = await apiClient.delete(`/api/crewai/crews/${crewId}`)
+    return response.data
+  },
+
+  /**
+   * 执行Crew
+   */
+  async executeCrew(crewId: string, inputs: Record<string, any> = {}): Promise<{ 
+    success: boolean
+    execution_id: string
+    message: string
+  }> {
+    const response = await apiClient.post(`/api/crewai/crews/${crewId}/execute`, { inputs })
+    return response.data
   },
 }
 
