@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Users, X, Plus } from "lucide-react"
+import { Users, X, Plus, PlayCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -194,6 +194,16 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
     }
   }
 
+  // 🆕 执行结果状态
+  const [executionResult, setExecutionResult] = useState<{
+    execution_id: string
+    output: string
+    logs: string[]
+    duration: number
+    error?: string
+  } | null>(null)
+  const [isExecuting, setIsExecuting] = useState(false)
+
   const handleRun = async () => {
     console.log("▶️ CrewDrawer - handleRun called", {
       selectedCrew: !!selectedCrew,
@@ -206,13 +216,24 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
     }
 
     try {
-      setLoading(true)
+      setIsExecuting(true)
+      setExecutionResult(null)  // 清空之前的结果
+      
       console.log("🚀 执行Crew:", selectedCrew.id)
       const result = await api.crewai.executeCrew(selectedCrew.id, {})
+      
+      setExecutionResult(result)
+      
       if (result.success) {
         toast({
           title: "执行成功",
-          description: `Crew已开始执行，执行ID: ${result.execution_id}`,
+          description: `耗时 ${result.duration?.toFixed(2)}秒`,
+        })
+      } else {
+        toast({
+          title: "执行失败",
+          description: result.error || "未知错误",
+          variant: "destructive",
         })
       }
     } catch (error) {
@@ -223,7 +244,7 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
         variant: "destructive",
       })
     } finally {
-      setLoading(false)
+      setIsExecuting(false)
     }
   }
 
@@ -485,11 +506,96 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
 
                     <TabsContent value="results" className="flex-1">
                       <ScrollArea className="h-[calc(100vh-240px)]">
-                        <div className="p-6">
-                          <div className="text-center text-muted-foreground py-8">
-                            <p>No execution results yet</p>
-                            <p className="text-xs">Run the crew to see results</p>
-                          </div>
+                        <div className="p-6 space-y-4">
+                          {isExecuting ? (
+                            // 执行中状态
+                            <div className="flex items-center justify-center py-12">
+                              <div className="text-center">
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                                <p className="text-lg font-semibold">Executing Crew...</p>
+                                <p className="text-sm text-muted-foreground">Please wait while the team completes the tasks</p>
+                              </div>
+                            </div>
+                          ) : executionResult ? (
+                            // 执行结果
+                            <>
+                              {/* 执行摘要 */}
+                              <div className={`p-4 rounded-lg border ${
+                                executionResult.error ? 'bg-destructive/10 border-destructive' : 'bg-green-500/10 border-green-500'
+                              }`}>
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <h4 className="font-semibold">
+                                      {executionResult.error ? '❌ Execution Failed' : '✅ Execution Completed'}
+                                    </h4>
+                                    <p className="text-sm text-muted-foreground">
+                                      ID: {executionResult.execution_id}
+                                    </p>
+                                    {executionResult.duration && (
+                                      <p className="text-sm text-muted-foreground">
+                                        Duration: {executionResult.duration.toFixed(2)}s
+                                      </p>
+                                    )}
+                                  </div>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(
+                                        JSON.stringify(executionResult, null, 2)
+                                      )
+                                      toast({ title: "Copied to clipboard" })
+                                    }}
+                                  >
+                                    Export
+                                  </Button>
+                                </div>
+                              </div>
+
+                              {/* 执行日志 */}
+                              {executionResult.logs && executionResult.logs.length > 0 && (
+                                <div className="space-y-2">
+                                  <h4 className="font-semibold">📋 Execution Logs</h4>
+                                  <div className="bg-muted/50 rounded-lg p-4 font-mono text-xs space-y-1 max-h-[300px] overflow-y-auto">
+                                    {executionResult.logs.map((log, i) => (
+                                      <div key={i} className="text-muted-foreground">
+                                        {log}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 执行输出 */}
+                              {executionResult.output && (
+                                <div className="space-y-2">
+                                  <h4 className="font-semibold">📝 Output</h4>
+                                  <div className="bg-muted/50 rounded-lg p-4 whitespace-pre-wrap text-sm">
+                                    {executionResult.output}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 错误信息 */}
+                              {executionResult.error && (
+                                <div className="space-y-2">
+                                  <h4 className="font-semibold text-destructive">❌ Error</h4>
+                                  <div className="bg-destructive/10 rounded-lg p-4 text-sm text-destructive">
+                                    {executionResult.error}
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            // 无结果状态
+                            <div className="text-center text-muted-foreground py-12">
+                              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
+                                <PlayCircle className="h-8 w-8" />
+                              </div>
+                              <p className="text-lg font-semibold">No execution results yet</p>
+                              <p className="text-sm">Click "Run Crew" to execute the team</p>
+                            </div>
+                          )}
                         </div>
                       </ScrollArea>
                     </TabsContent>

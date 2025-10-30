@@ -1053,23 +1053,114 @@ async def delete_crew(crew_id: str):
 
 @app.post("/api/crewai/crews/{crew_id}/execute")
 async def execute_crew(crew_id: str, inputs: dict = {}):
-    """执行Crew"""
-    crew = _load_crew(crew_id)
-    if not crew:
+    """
+    执行Crew
+    
+    Args:
+        crew_id: Crew ID
+        inputs: 执行输入参数
+    
+    Returns:
+        {
+            success: bool,
+            execution_id: str,
+            output: str,  # 执行结果
+            logs: List[str],  # 执行日志
+            duration: float  # 执行时间(秒)
+        }
+    """
+    crew_config = _load_crew(crew_id)
+    if not crew_config:
         raise HTTPException(status_code=404, detail="Crew not found")
     
     try:
         from datetime import datetime
-        # TODO: 实现实际的CrewAI执行逻辑
+        import time
+        from crewai import Crew, Agent, Task, Process
+        
+        execution_id = f"exec_{crew_id}_{int(datetime.now().timestamp())}"
+        start_time = time.time()
+        logs = []
+        
+        logger.info(f"🚀 开始执行Crew: {crew_id}")
+        logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] 🚀 开始执行Crew: {crew_config.get('name', crew_id)}")
+        
+        # 1. 创建Agents
+        agents = []
+        for agent_config in crew_config.get("agents", []):
+            logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] 👤 创建Agent: {agent_config.get('role', 'Unknown')}")
+            agent = Agent(
+                role=agent_config.get("role", "Agent"),
+                goal=agent_config.get("goal", "Complete the task"),
+                backstory=agent_config.get("backstory", "I am a helpful assistant"),
+                verbose=True,
+                allow_delegation=agent_config.get("allow_delegation", False),
+                max_iter=agent_config.get("max_iter", 15),
+                memory=agent_config.get("memory", True)
+            )
+            agents.append(agent)
+        
+        # 2. 创建Tasks
+        tasks = []
+        for i, task_config in enumerate(crew_config.get("tasks", [])):
+            logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] 📋 创建Task: {task_config.get('description', 'Unknown')[:50]}...")
+            
+            # 分配agent
+            agent_role = task_config.get("agent", "")
+            assigned_agent = agents[0]  # 默认第一个agent
+            for agent in agents:
+                if agent.role == agent_role:
+                    assigned_agent = agent
+                    break
+            
+            task = Task(
+                description=task_config.get("description", "Complete this task"),
+                expected_output=task_config.get("expected_output", "Task completed"),
+                agent=assigned_agent
+            )
+            tasks.append(task)
+        
+        # 3. 创建Crew并执行
+        logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] 🔧 创建Crew实例...")
+        crew = Crew(
+            agents=agents,
+            tasks=tasks,
+            process=Process.sequential,  # 顺序执行
+            verbose=True
+        )
+        
+        logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] ▶️ 开始执行任务...")
+        
+        # 执行（同步）
+        result = crew.kickoff(inputs=inputs)
+        
+        duration = time.time() - start_time
+        logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ 执行完成！耗时: {duration:.2f}秒")
+        
+        logger.info(f"✅ Crew执行成功: {execution_id}, 耗时: {duration:.2f}s")
         
         return {
             "success": True,
-            "execution_id": f"exec_{crew_id}_{int(datetime.now().timestamp())}",
-            "message": "Crew execution started (implementation pending)"
+            "execution_id": execution_id,
+            "output": str(result) if result else "No output",
+            "logs": logs,
+            "duration": duration
         }
+        
     except Exception as e:
         logger.error(f"❌ 执行Crew失败: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to execute crew: {str(e)}")
+        import traceback
+        error_trace = traceback.format_exc()
+        logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ 执行失败: {str(e)}")
+        
+        return {
+            "success": False,
+            "execution_id": execution_id if 'execution_id' in locals() else "unknown",
+            "output": "",
+            "logs": logs,
+            "error": str(e),
+            "traceback": error_trace
+        }
 
 
 # ==================== 主入口 ====================
