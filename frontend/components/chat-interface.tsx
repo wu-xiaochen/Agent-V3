@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useAppStore } from "@/lib/store"
 import { MessageBubble } from "./message-bubble"
 import { Card } from "@/components/ui/card"
+import { CrewDrawer } from "./crewai/crew-drawer"
 
 // 🆕 类似V0的思维链展示组件
 function ThinkingStatus({ 
@@ -495,9 +496,12 @@ export function ChatInterface() {
 
   return (
     <div className="flex-1 flex flex-col h-screen">
-      <div className="border-b border-border p-4 bg-card flex-shrink-0">
-        <h2 className="text-lg font-semibold text-card-foreground">Chat Assistant</h2>
-        <p className="text-sm text-muted-foreground">Ask me anything about your AI agents</p>
+      <div className="border-b border-border p-4 bg-card flex-shrink-0 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-card-foreground">Chat Assistant</h2>
+          <p className="text-sm text-muted-foreground">Ask me anything about your AI agents</p>
+        </div>
+        <CrewDrawer />
       </div>
 
       <ScrollArea className="flex-1 p-4 overflow-hidden" ref={scrollAreaRef}>
