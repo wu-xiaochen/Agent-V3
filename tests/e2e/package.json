@@ -1,0 +1,27 @@
+{
+  "name": "agent-v3-e2e-tests",
+  "version": "1.0.0",
+  "description": "E2E tests for Agent-V3 using Playwright",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:headed": "playwright test --headed",
+    "test:chromium": "playwright test --project=chromium",
+    "report": "playwright show-report",
+    "install:browsers": "playwright install chromium"
+  },
+  "keywords": [
+    "e2e",
+    "playwright",
+    "testing"
+  ],
+  "author": "AI Development Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0"
+  }
+}
+
