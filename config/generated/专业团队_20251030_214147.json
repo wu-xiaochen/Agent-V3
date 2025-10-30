@@ -1,0 +1,63 @@
+{
+  "business_process": "{\n  \"business_domain\": \"区块链技术与供应链管理研究\",\n  \"task_description\": \"撰写一篇关于区块链技术在供应链管理中的应用的研究报告，需要研究员收集资料、分析师进行分析、作家整合成文\",\n  \"team_roles\": [\"研究员\", \"分析师\", \"作家\"],\n  \"role_details\": {\n    \"研究员\": \"负责收集区块链技术在供应链管理领域的最新文献、案例研究和数据资料\", \n    \"分析师\": \"负责分析区块链技术的优势、挑战、应用效果和未来趋势\",\n    \"作家\": \"负责将研究成果整合成逻辑清晰、结构完整的研究报告\"\n  },\n  \"output_format\": \"完整的研究报告文档",
+  "crewai_config": {
+    "name": "专业团队",
+    "description": "基于业务需求 '{\n  \"business_domain\": \"区块链技术与供应链管理研究\",\n  \"task_description\": \"撰写一篇关于区块链技术在供应链管理中的应用的研究报告，需要研究员收集资料、分析师进行分析、作家整合成文\",\n  \"team_roles\": [\"研究员\", \"分析师\", \"作家\"],\n  \"role_details\": {\n    \"研究员\": \"负责收集区块链技术在供应链管理领域的最新文献、案例研究和数据资料\", \n    \"分析师\": \"负责分析区块链技术的优势、挑战、应用效果和未来趋势\",\n    \"作家\": \"负责将研究成果整合成逻辑清晰、结构完整的研究报告\"\n  },\n  \"output_format\": \"完整的研究报告文档' 生成的专业团队",
+    "agents": [
+      {
+        "name": "供应链分析师_analyst",
+        "role": "负责分析供应链数据和趋势",
+        "goal": "深入分析供应链数据，识别问题和机会，提供数据驱动的洞察",
+        "backstory": "你是一位专业的供应链数据分析师，精通各种数据分析工具和方法，能够从复杂数据中提取有价值的信息。",
+        "tools": [
+          "calculator",
+          "search",
+          "time"
+        ],
+        "verbose": true,
+        "allow_delegation": false,
+        "max_iter": 25,
+        "max_rpm": 1000
+      },
+      {
+        "name": "供应链协调员_coordinator",
+        "role": "负责协调供应链各环节的运作",
+        "goal": "确保供应链各环节高效协同，优化整体运作效率",
+        "backstory": "你是一位出色的供应链协调专家，擅长跨部门沟通和资源协调，能够有效解决供应链中的各种协调问题。",
+        "tools": [
+          "calculator",
+          "search",
+          "time"
+        ],
+        "verbose": true,
+        "allow_delegation": false,
+        "max_iter": 25,
+        "max_rpm": 1000
+      }
+    ],
+    "tasks": [
+      {
+        "name": "供应链分析_1",
+        "description": "分析当前供应链状况，识别关键问题和机会",
+        "agent": "供应链分析师_analyst",
+        "expected_output": "详细的供应链分析报告，包括现状、问题和机会",
+        "context": [],
+        "tools": []
+      },
+      {
+        "name": "供应链协调_2",
+        "description": "协调供应链各环节，确保规划顺利实施",
+        "agent": "供应链协调员_coordinator",
+        "expected_output": "供应链协调计划，包括沟通机制和资源分配",
+        "context": [],
+        "tools": []
+      }
+    ],
+    "process": "sequential",
+    "manager_role": null,
+    "verbose": true,
+    "memory": true
+  },
+  "generated_at": "2025-10-30T21:41:47.454316",
+  "version": "1.0"
+}

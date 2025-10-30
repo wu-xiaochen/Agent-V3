@@ -385,6 +385,15 @@ export function ChatInterface() {
                 console.log("📦 observation类型:", typeof observationData)
                 
                 try {
+                  // 🆕 Python → JSON转换辅助函数
+                  const convertPythonToJSON = (pythonStr: string): string => {
+                    return pythonStr
+                      .replace(/'/g, '"')        // 单引号 → 双引号
+                      .replace(/\bTrue\b/g, 'true')   // True → true
+                      .replace(/\bFalse\b/g, 'false') // False → false
+                      .replace(/\bNone\b/g, 'null')   // None → null
+                  }
+                  
                   // 🆕 增强的JSON提取函数 (根据 OPTIMIZATION_RECOMMENDATIONS.md 优化)
                   const extractCrewConfig = (content: string | object): any => {
                     // 1. 对象类型直接提取
@@ -396,6 +405,24 @@ export function ChatInterface() {
                     
                     let cleanContent = content.trim()
                     console.log("🔍 准备解析JSON，原始内容前100字符:", cleanContent.substring(0, 100))
+                    
+                    // 🔥 尝试Python dict → JSON转换
+                    if (cleanContent.startsWith('{') && cleanContent.includes("'")) {
+                      console.log("🐍 检测到Python字典格式，尝试转换...")
+                      try {
+                        const jsonContent = convertPythonToJSON(cleanContent)
+                        const parsed = JSON.parse(jsonContent)
+                        console.log("✅ Python → JSON转换成功")
+                        const config = parsed.crew_config || parsed.config || parsed
+                        if (config.agents && config.tasks) {
+                          return validateAndCleanConfig(config)
+                        }
+                      } catch (e) {
+                        console.log("⚠️ Python转换失败，继续其他方法...")
+                      }
+                    }
+                    
+                    console.log("🔍 继续标准JSON解析...")
                     
                     // 2. 提取markdown代码块中的JSON
                     const codeBlockMatch = cleanContent.match(/```(?:json)?\s*(\{[\s\S]*?\}|\[[\s\S]*?\])\s*```/)
