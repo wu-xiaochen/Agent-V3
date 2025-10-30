@@ -8,8 +8,8 @@ import type { Message, FileAttachment, KnowledgeBase, Document } from "./types"
 // API 基础配置
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
-// 创建 axios 实例
-const apiClient: AxiosInstance = axios.create({
+// 创建 axios 实例并导出
+export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 300000, // 🆕 5分钟超时（CrewAI和复杂任务需要更长时间）
   headers: {
