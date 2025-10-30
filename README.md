@@ -1,82 +1,142 @@
-# Agent-V3: 企业级供应链智能体系统
+# Agent-V3: 企业级智能体系统 (Modern AI Agent Platform)
 
 [![Python Version](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](CHANGELOG.md)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)]()
-[![Production Ready](https://img.shields.io/badge/production-ready-success.svg)]()
+[![Frontend](https://img.shields.io/badge/frontend-Next.js%2014-black.svg)](https://nextjs.org)
 [![Code Quality](https://img.shields.io/badge/code%20quality-A-brightgreen.svg)]()
 
-Agent-V3 是一个**企业级**智能体系统，基于 LangChain 框架构建，具备完整的上下文感知、自动任务续接、多智能体协作等核心能力。经过全面的架构审视和优化，**已达到生产环境部署标准**（架构评分 93/100，整体评分 92/100）。
+Agent-V3 是一个**现代化的企业级**智能体平台，基于 LangChain 框架构建，配备精美的 Web 界面。具备完整的思维链可视化、会话管理、多模态支持、CrewAI 协作等核心能力。
 
-> 🎉 **v3.0-final** - 生产就绪版本，100% 测试通过，具备完整的文档和部署指南
+> 🎉 **v3.1.0** - 思维链系统完成，Web界面上线，完整生产就绪
+
+## ✨ 最新更新 (v3.1.0)
+
+- 🧠 **完整思维链系统** - 实时可视化 AI 的思考、规划、工具调用全过程（V0风格）
+- 🎨 **现代化 Web 界面** - 基于 Next.js 14 + TypeScript + Tailwind CSS
+- 💬 **会话管理** - 创建、切换、删除会话，自动生成标题，localStorage持久化
+- 📁 **文件上传** - 支持 PDF、Word、Excel、图片等多种格式，自动解析
+- 🤖 **AI 头像** - 思维状态显示，默认折叠，点击展开查看详情
+- ⚡ **实时更新** - 工具调用状态实时推送，思维链轮询更新
+
+[查看完整更新日志](CHANGELOG.md)
 
 ## 🌟 核心特性
 
-### 功能特性
-- 🧠 **双层上下文感知** - LangChain Memory + ContextTracker，从"记住对话"到"理解意图"
-- 🔄 **自动任务续接** - 达到限制时自动继续执行，确保复杂任务完成（准确率 95%+）
-- 🤖 **智能工具选择** - 基于上下文的工具推荐，"运行它"自动匹配正确工具
-- 🌊 **N8N工作流集成** - LLM驱动的工作流生成，支持 34+ 节点类型
-- 👥 **CrewAI团队协作** - 多智能体协作，支持自定义角色和工具配置
-- 💾 **Redis持久化记忆** - 会话数据持久化，跨重启保留对话历史
+### 🎨 用户界面
+- 💻 **现代化 Web 界面** - Next.js 14 + TypeScript + Tailwind CSS + shadcn/ui
+- 💬 **会话管理** - 创建、切换、删除、重命名会话，支持多会话并行
+- 🧠 **思维链可视化** - V0风格的思考过程展示，实时显示工具调用状态
+- 📁 **文件上传** - 拖拽上传，支持PDF/Word/Excel/图片，自动解析
+- 🎭 **响应式设计** - 支持桌面和移动端，流畅的交互体验
+- 🌓 **主题支持** - 深色/浅色主题切换（规划中）
 
-### 架构特性
-- 🏗️ **清晰的分层架构** - 接口层/智能体层/核心层/基础设施层，架构评分 93/100
-- ⚙️ **环境变量管理** - EnvManager 集中管理配置，支持多环境部署（.env 文件）
-- 🚀 **配置缓存优化** - LRU 缓存提升配置加载性能 40%+
-- 🔧 **精确异常处理** - 所有核心模块使用精确异常捕获，便于调试
-- 🐳 **完整 Docker 支持** - Dockerfile + docker-compose.yml，一键部署
+### 🤖 智能体能力
+- 🧠 **思维链系统** - 完整记录 AI 思考过程（Thought → Planning → Action → Observation）
+- 🔄 **自动任务续接** - 复杂任务自动分解和继续执行
+- 🤖 **智能工具选择** - 基于上下文自动选择和调用工具
+- 👥 **CrewAI协作** - 多智能体团队协作，支持自定义角色和任务
+- 💾 **Redis记忆** - 持久化对话历史，跨会话保留上下文
+- 📊 **上下文追踪** - ContextTracker 记录查询和工具调用历史
 
-### 生产级特性
-- ✅ **100% 测试通过** - 14 项端到端测试全部通过，覆盖所有核心功能
-- 📚 **完整文档体系** - 部署指南、环境配置、架构审查等 10+ 份专业文档
-- 🔒 **安全配置** - 环境变量管理，API Key 保护，配置文件后备机制
-- 📊 **性能优化** - 配置缓存、上下文追踪优化、异步支持（规划中）
+### 🔧 工具和集成
+- 🌊 **N8N工作流** - LLM驱动的工作流生成和执行
+- 📝 **文档生成** - 支持 Markdown、PDF、Word 格式
+- 🔍 **网络搜索** - Tavily、DuckDuckGo 集成
+- 🕐 **实用工具** - 时间、计算器等基础工具
+- 🖼️ **多模态支持** - 图片识别（Qwen-VL）、文档解析
+- 🔌 **MCP协议** - Model Context Protocol 工具通信
+
+### 🏗️ 架构特性
+- 🎯 **清晰分层** - 接口层/智能体层/核心层/基础设施层
+- 🔧 **模块化设计** - 高内聚、低耦合，易于扩展
+- ⚙️ **配置驱动** - YAML配置文件，支持多环境
+- 🔄 **异步支持** - 基于 asyncio 的高性能异步处理
+- 🐳 **容器化** - Docker + Docker Compose 一键部署
+
+### 🎯 生产级特性
+- ✅ **完整测试** - 单元测试、集成测试、E2E测试
+- 📚 **完善文档** - 架构文档、API文档、部署指南
+- 🔒 **安全性** - 环境变量管理，API Key保护
+- 📊 **性能优化** - 配置缓存、连接池、批处理
+- 🔍 **可观测性** - 结构化日志、监控告警（规划中）
 
 ## 🚀 快速开始
 
-### 方式一：Docker 一键部署（推荐）
+### 完整部署（前端 + 后端）
 
 ```bash
-# 克隆项目
+# 1. 克隆项目
 git clone https://github.com/wu-xiaochen/Agent-V3.git
 cd Agent-V3
 
-# 配置环境变量
+# 2. 配置环境变量
 cp .env.example .env
 # 编辑 .env 文件，设置 SILICONFLOW_API_KEY 等
 
-# 启动所有服务（Agent + Redis + PostgreSQL）
-docker-compose up -d
+# 3. 后端设置
+# 创建Python虚拟环境
+python3 -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
-# 查看日志
-docker-compose logs -f agent
+# 安装后端依赖
+pip install -r requirements.txt
+
+# 启动Redis（必需）
+docker run -d -p 6379:6379 redis:latest
+
+# 启动后端API服务器
+python api_server.py
+# 后端运行在 http://localhost:8000
+
+# 4. 前端设置（新终端）
+cd frontend
+
+# 安装前端依赖
+npm install
+# 或使用 yarn: yarn install
+# 或使用 pnpm: pnpm install
+
+# 启动前端开发服务器
+npm run dev
+# 前端运行在 http://localhost:3000
+
+# 5. 访问应用
+# 打开浏览器访问: http://localhost:3000
 ```
 
-### 方式二：本地开发部署
+### Docker 一键部署（规划中）
 
 ```bash
 # 克隆项目
 git clone https://github.com/wu-xiaochen/Agent-V3.git
 cd Agent-V3
 
-# 安装依赖
+# 启动所有服务（前端 + 后端 + Redis）
+docker-compose up -d
+
+# 访问应用
+# 前端: http://localhost:3000
+# 后端API: http://localhost:8000
+```
+
+### 仅后端部署（命令行使用）
+
+```bash
+# 1. 克隆并配置
+git clone https://github.com/wu-xiaochen/Agent-V3.git
+cd Agent-V3
 pip install -r requirements.txt
 
-# 配置环境变量（推荐使用 .env 文件）
-# 方式 1: 创建 .env 文件
-cp .env.example .env
-# 编辑 .env 文件，设置 SILICONFLOW_API_KEY, N8N_API_KEY 等
-
-# 方式 2: 直接导出环境变量
+# 2. 配置环境变量
 export SILICONFLOW_API_KEY="your_api_key"
-export N8N_API_KEY="your_n8n_api_key"  # 可选
 
-# 启动Redis（必需，用于记忆功能）
+# 3. 启动Redis
 docker run -d -p 6379:6379 redis:latest
 
-# 启动 n8n（可选，如需工作流功能）
-docker run -d -p 5678:5678 n8nio/n8n
+# 4. 使用命令行交互
+python main.py --interactive
 ```
 
 > 💡 **环境配置**: 详细的配置说明请查看 [环境配置指南](ENV_SETUP_GUIDE.md)
