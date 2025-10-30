@@ -139,9 +139,28 @@ function ThinkingStatus({
 export function ChatInterface() {
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [thinkingChain, setThinkingChain] = useState<any[]>([])  // 🆕 完整思维链
-  const [isThinking, setIsThinking] = useState(false)
+  // 🆕 改为按会话存储思维状态
+  const [sessionThinkingStates, setSessionThinkingStates] = useState<Record<string, {
+    isThinking: boolean
+    thinkingChain: any[]
+  }>>({})
+  
+  // 当前会话的思维状态
+  const currentThinkingState = sessionThinkingStates[currentSession] || { isThinking: false, thinkingChain: [] }
+  const isThinking = currentThinkingState.isThinking
+  const thinkingChain = currentThinkingState.thinkingChain
   const [messageThinkingChains, setMessageThinkingChains] = useState<Record<string, any[]>>({})  // 🆕 每条消息的思维链
+  
+  // 🆕 辅助函数：更新当前会话的思维状态
+  const updateSessionThinking = (updates: { isThinking?: boolean; thinkingChain?: any[] }) => {
+    setSessionThinkingStates(prev => ({
+      ...prev,
+      [currentSession]: {
+        isThinking: updates.isThinking ?? prev[currentSession]?.isThinking ?? false,
+        thinkingChain: updates.thinkingChain ?? prev[currentSession]?.thinkingChain ?? []
+      }
+    }))
+  }
   const [abortController, setAbortController] = useState<AbortController | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -179,8 +198,8 @@ export function ChatInterface() {
     
     // 切换会话时清理UI状态，但不中断请求（让后台继续）
     setIsLoading(false)
-    setIsThinking(false)
-    setThinkingChain([])
+    // 🆕 不清理thinking状态，保留在session中
+    // updateSessionThinking({ isThinking: false, thinkingChain: [] })
     setUploadedFiles([])
     
     // ⚠️ 不再中断请求，让AI在后台继续生成
@@ -241,8 +260,7 @@ export function ChatInterface() {
       abortController.abort()
       setAbortController(null)
       setIsLoading(false)
-      setIsThinking(false)
-      setThinkingChain([])
+      updateSessionThinking({ isThinking: false, thinkingChain: [] })
       
       const stopMessage = {
         id: `msg-${Date.now()}-stop`,
@@ -306,8 +324,7 @@ export function ChatInterface() {
     
     setInput("")
     setIsLoading(true)
-    setIsThinking(true)
-    setThinkingChain([])
+    updateSessionThinking({ isThinking: true, thinkingChain: [] })
     
     // ✅ 清空已上传的文件（发送后）
     setUploadedFiles([])
@@ -432,7 +449,7 @@ export function ChatInterface() {
                 }, [])
               
               console.log(`🔧 工具步骤: ${toolSteps.length} 个`)
-              setThinkingChain(toolSteps)
+              updateSessionThinking({ thinkingChain: toolSteps })
             }
             
             // 检查是否已完成
@@ -522,7 +539,7 @@ export function ChatInterface() {
                 return acc
               }, [])
             
-            setThinkingChain(finalToolSteps)
+            updateSessionThinking({ thinkingChain: finalToolSteps })
             console.log("🔍 最终思维链数据:", finalToolSteps)
           }
         } catch (err) {
@@ -530,7 +547,7 @@ export function ChatInterface() {
         }
         
         // 🆕 停止thinking状态
-        setIsThinking(false)
+        updateSessionThinking({ isThinking: false })
         
         // 🆕 立即保存当前消息的思维链（使用finalToolSteps，不依赖state）
         console.log("💾 准备保存思维链:", {
@@ -603,7 +620,7 @@ export function ChatInterface() {
           console.log("⚠️ 未检测到open_canvas action")
         }
       } else {
-        setIsThinking(false)
+        updateSessionThinking({ isThinking: false })
         const errorMessage = {
           id: `msg-${Date.now()}-error`,
           role: "assistant" as const,
@@ -620,7 +637,7 @@ export function ChatInterface() {
         status: error.response?.status
       })
       
-      setIsThinking(false)
+      updateSessionThinking({ isThinking: false })
       setToolCalls([])
       
       const errorMessage = {
