@@ -34,6 +34,7 @@ interface ExecutionLog {
 interface CrewExecutionMonitorProps {
   crewId: string
   inputs?: Record<string, any>
+  files?: string[]  // 文件ID列表
   onComplete?: (result: any) => void
   onError?: (error: any) => void
 }
@@ -41,8 +42,9 @@ interface CrewExecutionMonitorProps {
 export function CrewExecutionMonitor({ 
   crewId, 
   inputs = {},
+  files = [],
   onComplete,
-  onError 
+  onError
 }: CrewExecutionMonitorProps) {
   const [isRunning, setIsRunning] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
@@ -106,7 +108,10 @@ export function CrewExecutionMonitor({
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(inputs)
+        body: JSON.stringify({
+          inputs,
+          files  // 🆕 传递文件ID列表
+        })
       })
 
       if (!response.ok) {

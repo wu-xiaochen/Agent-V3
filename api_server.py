@@ -1460,8 +1460,14 @@ async def execute_crew(crew_id: str, inputs: dict = {}):
         }
 
 
+class CrewExecutionRequest(BaseModel):
+    """CrewAI执行请求"""
+    inputs: Dict[str, Any] = {}
+    files: List[str] = []  # 文件ID列表
+    
+    
 @app.post("/api/crewai/crews/{crew_id}/execute/stream")
-async def execute_crew_stream(crew_id: str, inputs: dict = {}):
+async def execute_crew_stream(crew_id: str, request: CrewExecutionRequest = CrewExecutionRequest()):
     """
     流式执行Crew，实时返回执行状态
     
@@ -1477,11 +1483,13 @@ async def execute_crew_stream(crew_id: str, inputs: dict = {}):
     
     Args:
         crew_id: Crew ID
-        inputs: 执行输入参数
+        request: 执行请求（包含inputs和files）
     
     Returns:
         StreamingResponse (SSE格式)
     """
+    inputs = request.inputs
+    file_ids = request.files
     crew_config = _load_crew(crew_id)
     if not crew_config:
         raise HTTPException(status_code=404, detail="Crew not found")
@@ -1502,6 +1510,42 @@ async def execute_crew_stream(crew_id: str, inputs: dict = {}):
             await asyncio.sleep(0.1)
             
             logger.info(f"🚀 开始流式执行Crew: {crew_id}")
+            
+            # 🆕 处理文件输入
+            file_contents = {}
+            if file_ids:
+                yield f"data: {json.dumps({'type': 'status', 'message': f'加载 {len(file_ids)} 个文件...', 'timestamp': datetime.now().isoformat()})}\n\n"
+                await asyncio.sleep(0.1)
+                
+                for file_id in file_ids:
+                    try:
+                        # 从文件管理器获取文件信息
+                        file_info = file_manager.get_file_info(file_id)
+                        if file_info and file_info.get("success"):
+                            file_path = file_info.get("path")
+                            if file_path and Path(file_path).exists():
+                                # 解析文件内容
+                                from src.infrastructure.multimodal.document_parser import parse_document
+                                parse_result = parse_document(file_path)
+                                
+                                if parse_result.get("success"):
+                                    content = parse_result.get("full_text") or parse_result.get("content", "")
+                                    file_contents[file_id] = {
+                                        "filename": file_info.get("filename", file_id),
+                                        "type": parse_result.get("type", "unknown"),
+                                        "content": content
+                                    }
+                                    yield f"data: {json.dumps({'type': 'log', 'message': f'✅ 已加载文件: {file_info.get(\"filename\")} ({len(content)} 字符)', 'log_type': 'success', 'timestamp': datetime.now().isoformat()})}\n\n"
+                                else:
+                                    yield f"data: {json.dumps({'type': 'log', 'message': f'⚠️ 文件解析失败: {file_info.get(\"filename\")}', 'log_type': 'warning', 'timestamp': datetime.now().isoformat()})}\n\n"
+                    except Exception as e:
+                        logger.warning(f"文件加载失败 {file_id}: {e}")
+                        yield f"data: {json.dumps({'type': 'log', 'message': f'❌ 文件加载错误: {str(e)}', 'log_type': 'error', 'timestamp': datetime.now().isoformat()})}\n\n"
+                
+                # 将文件内容添加到inputs中
+                if file_contents:
+                    inputs["__files__"] = file_contents
+                    logger.info(f"📁 已加载 {len(file_contents)} 个文件到执行上下文")
             
             # 1. 创建Agents
             agents = []

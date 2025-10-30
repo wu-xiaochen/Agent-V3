@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Users, X, Plus, PlayCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -44,6 +44,16 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
   const [loading, setLoading] = useState(false)
   const [canvasNodes, setCanvasNodes] = useState<Node[]>([])
   const [canvasEdges, setCanvasEdges] = useState<Edge[]>([])
+  
+  // 🆕 文件上传状态
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{
+    id: string
+    filename: string
+    size: number
+    type: string
+  }>>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  
   const { toast } = useToast()
 
   // 加载Crew列表
@@ -508,10 +518,99 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
                     <TabsContent value="results" className="flex-1">
                       <ScrollArea className="h-[calc(100vh-240px)]">
                         <div className="p-6">
+                          {/* 🆕 文件上传区域 */}
+                          <div className="mb-6 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-semibold">Attached Files</h4>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => fileInputRef.current?.click()}
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Upload File
+                              </Button>
+                            </div>
+                            
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              className="hidden"
+                              multiple
+                              accept=".pdf,.docx,.doc,.xlsx,.xls,.txt,.md"
+                              onChange={async (e) => {
+                                const files = Array.from(e.target.files || [])
+                                if (files.length === 0) return
+                                
+                                for (const file of files) {
+                                  try {
+                                    const result = await api.files.uploadFile(file, {
+                                      fileType: 'data'
+                                    })
+                                    
+                                    if (result.success) {
+                                      setUploadedFiles(prev => [...prev, {
+                                        id: result.file_id,
+                                        filename: result.filename,
+                                        size: result.size,
+                                        type: file.type
+                                      }])
+                                      
+                                      toast({
+                                        title: "File uploaded",
+                                        description: `${result.filename} uploaded successfully`
+                                      })
+                                    }
+                                  } catch (error) {
+                                    console.error("File upload failed:", error)
+                                    toast({
+                                      title: "Upload failed",
+                                      description: `Failed to upload ${file.name}`,
+                                      variant: "destructive"
+                                    })
+                                  }
+                                }
+                                
+                                // 重置input
+                                if (fileInputRef.current) {
+                                  fileInputRef.current.value = ""
+                                }
+                              }}
+                            />
+                            
+                            {uploadedFiles.length > 0 && (
+                              <div className="grid gap-2">
+                                {uploadedFiles.map((file) => (
+                                  <div
+                                    key={file.id}
+                                    className="flex items-center justify-between px-3 py-2 bg-muted rounded-md"
+                                  >
+                                    <div className="flex-1">
+                                      <p className="text-sm font-medium truncate">{file.filename}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {(file.size / 1024).toFixed(2)} KB
+                                      </p>
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        setUploadedFiles(prev => prev.filter(f => f.id !== file.id))
+                                      }}
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          
                           {/* 🆕 使用新的实时执行监控组件 */}
                           <CrewExecutionMonitor
                             crewId={selectedCrew.id}
                             inputs={{}}
+                            files={uploadedFiles.map(f => f.id)}  // 🆕 传递文件ID列表
                             onComplete={(result) => {
                               setExecutionResult(result)
                               setIsExecuting(false)
