@@ -11,7 +11,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 // 创建 axios 实例
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000, // 60 seconds
+  timeout: 300000, // 🆕 5分钟超时（CrewAI和复杂任务需要更长时间）
   headers: {
     "Content-Type": "application/json",
   },
@@ -305,6 +305,79 @@ export const toolsAPI = {
     const response = await apiClient.get<ToolListResponse>("/api/tools/list")
     return response.data
   },
+
+  /**
+   * 获取工具调用历史
+   */
+  async getToolCallHistory(sessionId: string): Promise<{
+    success: boolean
+    session_id: string
+    tool_calls: Array<{
+      tool: string
+      status: string
+      input?: any
+      output?: string
+      error?: string
+      execution_time?: number
+      timestamp: string
+    }>
+    count: number
+  }> {
+    const response = await apiClient.get(`/api/tools/history/${sessionId}`)
+    return response.data
+  },
+
+  /**
+   * 清空工具调用历史
+   */
+  async clearToolCallHistory(sessionId: string): Promise<{
+    success: boolean
+    session_id: string
+    message: string
+  }> {
+    const response = await apiClient.delete(`/api/tools/history/${sessionId}`)
+    return response.data
+  },
+}
+
+// ==================== 🆕 Thinking Chain API ====================
+
+export const thinkingAPI = {
+  /**
+   * 获取思维链历史
+   */
+  async getThinkingChain(sessionId: string): Promise<{
+    success: boolean
+    session_id: string
+    thinking_chain: Array<{
+      type: string  // chain_start, thinking, thought, planning, action, observation, final_thought, chain_end
+      step: number
+      content: string
+      tool?: string
+      tool_input?: any
+      output?: string
+      error?: string
+      execution_time?: number
+      timestamp: string
+      status: string
+    }>
+    count: number
+  }> {
+    const response = await apiClient.get(`/api/thinking/history/${sessionId}`)
+    return response.data
+  },
+
+  /**
+   * 清空思维链历史
+   */
+  async clearThinkingChain(sessionId: string): Promise<{
+    success: boolean
+    session_id: string
+    message: string
+  }> {
+    const response = await apiClient.delete(`/api/thinking/history/${sessionId}`)
+    return response.data
+  },
 }
 
 // ==================== Knowledge Base API (待实现) ====================
@@ -380,6 +453,7 @@ export const api = {
   chat: chatAPI,
   files: filesAPI,
   tools: toolsAPI,
+  thinking: thinkingAPI,  // 🆕 思维链API
   knowledge: knowledgeAPI,
   crewai: crewaiAPI,
   health: healthAPI,

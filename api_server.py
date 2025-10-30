@@ -15,8 +15,8 @@ import uvicorn
 import asyncio
 import json
 
-# 导入项目模块
-from src.agents.unified.unified_agent import UnifiedAgent
+# 导入项目模块 - 延迟导入 UnifiedAgent 以避免循环导入
+# from src.agents.unified.unified_agent import UnifiedAgent  # 移至函数内部
 from src.interfaces.file_manager import get_file_manager
 from src.infrastructure.tools import get_tool_registry
 from src.config.config_loader import config_loader
@@ -55,6 +55,8 @@ app.include_router(enhanced_router)
 file_manager = None
 agent_instances = {}  # session_id -> agent
 websocket_connections = {}  # session_id -> websocket
+session_tool_calls = {}  # 🆕 session_id -> [tool_calls] - 存储每个会话的工具调用历史
+session_thinking_chains = {}  # 🆕 session_id -> [thinking_chain_steps] - 存储完整思维链
 
 
 # ==================== Pydantic 模型 ====================
@@ -96,6 +98,7 @@ class FileUploadResponse(BaseModel):
     download_url: str
     size: int
     message: str
+    parsed_content: Optional[Dict[str, Any]] = None  # 🆕 添加解析内容字段
 
 
 # ==================== 启动和关闭事件 ====================
@@ -185,19 +188,98 @@ async def chat_message(request: ChatMessage):
     try:
         session_id = request.session_id
         
+        # 🆕 创建工具调用回调函数
+        def tool_callback(call_info: Dict[str, Any]):
+            """工具调用回调，记录工具执行状态"""
+            # 初始化会话的工具调用列表
+            if session_id not in session_tool_calls:
+                session_tool_calls[session_id] = []
+            
+            # 转换datetime为字符串
+            call_data = {**call_info}
+            if 'timestamp' in call_data:
+                call_data['timestamp'] = call_data['timestamp'].isoformat()
+            
+            # 添加到会话历史
+            session_tool_calls[session_id].append(call_data)
+            logger.info(f"🔧 工具调用记录: {call_data.get('tool')} - {call_data.get('status')}")
+            
+            # 🆕 同时添加到思维链（如果是完成状态）
+            if call_info.get("status") in ["success", "error"]:
+                # 初始化思维链
+                if session_id not in session_thinking_chains:
+                    session_thinking_chains[session_id] = []
+                
+                # 查找最新的action步骤号
+                action_steps = [s for s in session_thinking_chains[session_id] if s.get("type") == "action"]
+                step_number = action_steps[-1]["step"] if action_steps else 1
+                
+                # 添加observation
+                observation_data = {
+                    "type": "observation",
+                    "step": step_number,
+                    "content": call_info.get("output", call_info.get("error", "")),
+                    "execution_time": call_info.get("execution_time", 0),
+                    "status": call_info["status"],
+                    "session_id": session_id,
+                    "timestamp": call_data['timestamp']
+                }
+                
+                if call_info.get("error"):
+                    observation_data["error"] = call_info["error"]
+                
+                session_thinking_chains[session_id].append(observation_data)
+                logger.debug(f"🧠 添加observation到思维链: Step {step_number}")
+            
+            # 记录到统计（仅在完成时）
+            if call_info.get("status") in ["success", "error"]:
+                record_tool_call(
+                    call_info["tool"],
+                    call_info.get("execution_time", 0),
+                    call_info["status"] == "success"
+                )
+        
+        # 🆕 创建思维链更新回调函数
+        def thinking_chain_callback(step_data: Dict[str, Any]):
+            """思维链更新回调，记录完整的思考过程"""
+            # 初始化会话的思维链列表
+            if session_id not in session_thinking_chains:
+                session_thinking_chains[session_id] = []
+            
+            # 添加到思维链历史
+            session_thinking_chains[session_id].append(step_data)
+            logger.debug(f"🧠 思维链记录: {step_data.get('type')} - Step {step_data.get('step', 0)}")
+        
         # 获取或创建 agent
         if session_id not in agent_instances:
+            # 🆕 延迟导入 UnifiedAgent 和 ThinkingChainHandler
+            from src.agents.unified.unified_agent import UnifiedAgent
+            from src.agents.shared.thinking_chain_handler import ThinkingChainHandler
+            
+            # 创建思维链处理器
+            thinking_handler = ThinkingChainHandler(
+                session_id=session_id,
+                on_update=thinking_chain_callback
+            )
+            
             logger.info(f"📝 创建新的 Agent 会话: {session_id}")
             agent = UnifiedAgent(
                 provider=request.provider,
                 model_name=request.model_name,
                 memory=request.memory,
                 session_id=session_id,
-                streaming_style="none"  # API 模式不使用流式输出
+                streaming_style="none",  # API 模式不使用流式输出
+                tool_callback=tool_callback,  # 🆕 传递工具回调
+                thinking_handler=thinking_handler  # 🆕 传递思维链处理器
             )
             agent_instances[session_id] = agent
         else:
             agent = agent_instances[session_id]
+            # 🆕 更新已存在的 agent 的回调
+            agent.tool_callback = tool_callback
+            # 如果已有thinking_handler，更新它的回调
+            if hasattr(agent, 'thinking_handler') and agent.thinking_handler:
+                agent.thinking_handler.on_update = thinking_chain_callback
         
         # ✅ 修复：处理附件并构建增强的prompt
         enhanced_message = request.message
@@ -312,6 +394,141 @@ async def get_chat_history(session_id: str, limit: int = 50):
         raise
     except Exception as e:
         logger.error(f"❌ 获取聊天历史失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/tools/history/{session_id}")
+async def get_tool_call_history(session_id: str):
+    """
+    获取会话的工具调用历史
+    
+    Args:
+        session_id: 会话ID
+        
+    Returns:
+        工具调用历史列表
+    """
+    try:
+        tool_calls = session_tool_calls.get(session_id, [])
+        logger.info(f"📊 获取工具调用历史: {session_id} - {len(tool_calls)} 条记录")
+        
+        return {
+            "success": True,
+            "session_id": session_id,
+            "tool_calls": tool_calls,
+            "count": len(tool_calls)
+        }
+    except Exception as e:
+        logger.error(f"❌ 获取工具调用历史失败: {e}")
+        return {
+            "success": False,
+            "session_id": session_id,
+            "tool_calls": [],
+            "count": 0,
+            "error": str(e)
+        }
+
+
+@app.delete("/api/tools/history/{session_id}")
+async def clear_tool_call_history(session_id: str):
+    """
+    清空会话的工具调用历史
+    
+    Args:
+        session_id: 会话ID
+        
+    Returns:
+        成功消息
+    """
+    try:
+        if session_id in session_tool_calls:
+            count = len(session_tool_calls[session_id])
+            session_tool_calls[session_id] = []
+            logger.info(f"🗑️ 清空工具调用历史: {session_id} - {count} 条记录")
+            return {
+                "success": True,
+                "session_id": session_id,
+                "message": f"已清空 {count} 条工具调用记录"
+            }
+        else:
+            return {
+                "success": True,
+                "session_id": session_id,
+                "message": "没有需要清空的记录"
+            }
+    except Exception as e:
+        logger.error(f"❌ 清空工具调用历史失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 🆕 思维链API ====================
+
+@app.get("/api/thinking/history/{session_id}")
+async def get_thinking_chain_history(session_id: str):
+    """
+    获取会话的完整思维链历史
+    
+    Args:
+        session_id: 会话ID
+        
+    Returns:
+        完整的思维链历史，包括：
+        - thought: 思考过程
+        - planning: 规划步骤
+        - action: 工具调用
+        - observation: 执行结果
+        - final_thought: 最终分析
+    """
+    try:
+        chain = session_thinking_chains.get(session_id, [])
+        logger.info(f"🧠 获取思维链历史: {session_id} - {len(chain)} 个步骤")
+        
+        return {
+            "success": True,
+            "session_id": session_id,
+            "thinking_chain": chain,
+            "count": len(chain)
+        }
+    except Exception as e:
+        logger.error(f"❌ 获取思维链历史失败: {e}")
+        return {
+            "success": False,
+            "session_id": session_id,
+            "thinking_chain": [],
+            "count": 0,
+            "error": str(e)
+        }
+
+
+@app.delete("/api/thinking/history/{session_id}")
+async def clear_thinking_chain_history(session_id: str):
+    """
+    清空会话的思维链历史
+    
+    Args:
+        session_id: 会话ID
+        
+    Returns:
+        成功消息
+    """
+    try:
+        if session_id in session_thinking_chains:
+            count = len(session_thinking_chains[session_id])
+            session_thinking_chains[session_id] = []
+            logger.info(f"🗑️ 清空思维链历史: {session_id} - {count} 个步骤")
+            return {
+                "success": True,
+                "session_id": session_id,
+                "message": f"已清空 {count} 个思维链步骤"
+            }
+        else:
+            return {
+                "success": True,
+                "session_id": session_id,
+                "message": "没有需要清空的记录"
+            }
+    except Exception as e:
+        logger.error(f"❌ 清空思维链历史失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -464,6 +681,9 @@ async def chat_stream(websocket: WebSocket):
             
             # 获取或创建 agent
             if session_id not in agent_instances:
+                # 🆕 延迟导入 UnifiedAgent
+                from src.agents.unified.unified_agent import UnifiedAgent
+                
                 agent = UnifiedAgent(
                     provider=provider,
                     model_name=model_name,
@@ -546,12 +766,15 @@ async def upload_file(
         parsed_content = None
         file_path = result.get("path")
         
+        logger.info(f"🔍 开始解析文档: file_path={file_path}, exists={Path(file_path).exists() if file_path else False}")
+        
         if file_path and Path(file_path).exists():
             try:
                 from src.infrastructure.multimodal.document_parser import parse_document
                 
                 # 解析文档
                 parse_result = parse_document(file_path)
+                logger.info(f"🔍 解析结果: {parse_result}")
                 
                 if parse_result.get("success"):
                     parsed_content = {
@@ -559,12 +782,14 @@ async def upload_file(
                         "summary": parse_result.get("summary") or parse_result.get("full_text", "")[:500],
                         "full_text": parse_result.get("full_text") or parse_result.get("content", "")
                     }
-                    logger.info(f"📄 文档解析成功: {file.filename}")
+                    logger.info(f"📄 文档解析成功: {file.filename}, parsed_content keys: {parsed_content.keys()}")
                 else:
                     logger.warning(f"⚠️  文档解析失败: {parse_result.get('error')}")
                     
             except Exception as e:
                 logger.warning(f"⚠️  文档解析失败: {e}")
+                import traceback
+                logger.debug(traceback.format_exc())
         
         response_data = {
             "success": True,
@@ -579,7 +804,11 @@ async def upload_file(
         if parsed_content:
             response_data["parsed_content"] = parsed_content
             response_data["message"] = "文件上传并解析成功"
+            logger.info(f"✅ 响应中包含 parsed_content: {bool(parsed_content)}")
+        else:
+            logger.warning(f"⚠️  响应中不包含 parsed_content")
         
+        logger.info(f"🔍 返回响应: {list(response_data.keys())}")
         return response_data
             
     except HTTPException:

@@ -65,23 +65,42 @@ export function Sidebar() {
     })))
   }, [currentSession])
 
-  // 监听消息变化，自动生成会话标题（基于第一条用户消息）
+  // 🆕 监听消息变化，更新会话标题和消息计数
   useEffect(() => {
-    if (messages.length > 0 && !sessionTitleGenerated && currentSession) {
-      const firstUserMessage = messages.find(m => m.role === "user")
-      if (firstUserMessage) {
-        // 生成标题：截取第一条消息的前20个字符
-        const title = firstUserMessage.content.slice(0, 20) + (firstUserMessage.content.length > 20 ? "..." : "")
-        console.log("📝 Auto-generating session title:", title)
-        
-        // 更新本地会话标题
-        setSessions(prev => prev.map(s => 
-          s.session_id === currentSession 
-            ? { ...s, last_message: title }
-            : s
-        ))
-        
-        setSessionTitleGenerated(true)
+    if (currentSession) {
+      const currentSessionMessages = messages.filter(m => m.role === "user" || m.role === "assistant")
+      
+      // 更新消息计数
+      setSessions(prev => prev.map(s => 
+        s.session_id === currentSession 
+          ? { ...s, message_count: currentSessionMessages.length }
+          : s
+      ))
+      
+      // 自动生成会话标题（基于第一条用户消息）
+      if (messages.length > 0 && !sessionTitleGenerated) {
+        const firstUserMessage = messages.find(m => m.role === "user")
+        if (firstUserMessage) {
+          const title = firstUserMessage.content.slice(0, 20) + (firstUserMessage.content.length > 20 ? "..." : "")
+          console.log("📝 Auto-generating session title:", title)
+          
+          // 🆕 保存标题到localStorage
+          const savedData = localStorage.getItem(`session_${currentSession}`)
+          if (savedData) {
+            const parsed = JSON.parse(savedData)
+            parsed.title = title
+            localStorage.setItem(`session_${currentSession}`, JSON.stringify(parsed))
+            console.log(`💾 Title auto-saved to localStorage for session ${currentSession}`)
+          }
+          
+          setSessions(prev => prev.map(s => 
+            s.session_id === currentSession 
+              ? { ...s, last_message: title }
+              : s
+          ))
+          
+          setSessionTitleGenerated(true)
+        }
       }
     }
   }, [messages, sessionTitleGenerated, currentSession, setSessionTitleGenerated])
@@ -122,12 +141,12 @@ export function Sidebar() {
       return
     }
     
-    // 更新全局状态
+    // ✅ 修复：只调用 setCurrentSession，它会自动加载历史消息
+    // 不要调用 clearMessages()，因为 setCurrentSession 内部会处理消息加载
     setCurrentSession(sessionId)
-    clearMessages()
     
     // 激活状态会通过 useEffect 自动更新
-    console.log("✅ Session switched")
+    console.log("✅ Session switched, messages will be loaded from localStorage")
   }
 
   // 删除会话
@@ -197,6 +216,15 @@ export function Sidebar() {
     console.log("💾 Saving session title:", sessionId, newTitle)
     
     try {
+      // 🆕 保存标题到localStorage
+      const savedData = localStorage.getItem(`session_${sessionId}`)
+      if (savedData) {
+        const parsed = JSON.parse(savedData)
+        parsed.title = newTitle
+        localStorage.setItem(`session_${sessionId}`, JSON.stringify(parsed))
+        console.log(`💾 Title saved to localStorage for session ${sessionId}`)
+      }
+      
       // TODO: 调用后端API保存标题
       // await api.chat.updateSession(sessionId, { title: newTitle })
       
@@ -218,7 +246,7 @@ export function Sidebar() {
     <div
       className={cn(
         "h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300 flex flex-col",
-        collapsed ? "w-16" : "w-60",
+        collapsed ? "w-16" : "w-72",  // 🆕 增加宽度从w-60到w-72，避免挡住删除按钮
       )}
     >
       {/* 头部 */}
@@ -303,10 +331,10 @@ export function Sidebar() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 shrink-0 absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10"
+                      className="h-6 w-6 shrink-0 absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10"
                       onClick={(e) => handleDeleteSession(session.session_id, e)}
                     >
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      <Trash2 className="h-3 w-3 text-destructive" />
                     </Button>
                   </>
                 )}

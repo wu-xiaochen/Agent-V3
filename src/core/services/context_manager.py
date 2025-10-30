@@ -5,7 +5,11 @@
 
 import logging
 from typing import List, Dict, Any, Optional
-from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
+# LangChain 1.0+ 导入路径
+try:
+    from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
+except ImportError:
+    from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain_core.language_models import BaseChatModel
 
 logger = logging.getLogger(__name__)

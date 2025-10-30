@@ -7,7 +7,17 @@ import warnings
 import logging
 from typing import Dict, Any, List, Optional
 from enum import Enum  # 🆕 导入枚举
-from langchain.agents import AgentExecutor, create_react_agent
+# LangChain 导入 - 兼容不同版本
+try:
+    # LangChain < 1.0
+    from langchain.agents import AgentExecutor, create_react_agent
+except ImportError:
+    # LangChain 1.0+ with classic
+    try:
+        from langchain_classic.agents import AgentExecutor, create_react_agent
+    except ImportError:
+        # Fallback to manual import
+        raise ImportError("Cannot import AgentExecutor and create_react_agent. Please install langchain or langchain-classic.")
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables.history import RunnableWithMessageHistory
@@ -47,6 +57,8 @@ class UnifiedAgent:
         session_id: Optional[str] = None,
         model_name: Optional[str] = None,
         streaming_style: str = "simple",  # simple, detailed, none
+        tool_callback: Optional[Any] = None,  # 🆕 工具调用回调函数
+        thinking_handler: Optional[Any] = None,  # 🆕 思维链处理器
         **kwargs
     ):
         """
@@ -59,9 +71,13 @@ class UnifiedAgent:
             session_id: 会话ID，用于区分不同对话
             model_name: 模型名称
             streaming_style: 流式输出样式 (simple=简洁, detailed=详细, none=无)
+            tool_callback: 工具调用回调函数，用于实时通知工具执行状态
+            thinking_handler: 思维链处理器，用于捕获完整的思考过程
             **kwargs: 额外的LLM参数
         """
         self.streaming_style = streaming_style
+        self.tool_callback = tool_callback  # 🆕 保存回调函数
+        self.thinking_handler = thinking_handler  # 🆕 保存思维链处理器
         # 处理模型名称参数
         if model_name:
             kwargs["model_name"] = model_name
@@ -104,6 +120,151 @@ class UnifiedAgent:
         self.session_id = session_id or "default"
         self.redis_url = redis_url
     
+    def _wrap_tool_with_callback(self, tool: Any) -> Any:
+        """
+        包装工具以支持回调
+        
+        Args:
+            tool: 原始工具
+            
+        Returns:
+            包装后的工具
+        """
+        if not self.tool_callback:
+            return tool
+        
+        # 保存原始的_run方法
+        original_run = tool._run if hasattr(tool, '_run') else None
+        original_arun = tool._arun if hasattr(tool, '_arun') else None
+        
+        if not original_run:
+            logger.warning(f"⚠️  工具 {tool.name} 没有 _run 方法，跳过包装")
+            return tool
+        
+        import time
+        from datetime import datetime
+        
+        def wrapped_run(*args, **kwargs):
+            """同步工具执行包装"""
+            tool_name = getattr(tool, 'name', str(tool))
+            
+            # 🆕 发送开始状态
+            try:
+                if self.tool_callback:
+                    self.tool_callback({
+                        "tool": tool_name,
+                        "status": "running",
+                        "input": kwargs if kwargs else args,
+                        "timestamp": datetime.now()
+                    })
+            except Exception as e:
+                logger.error(f"❌ 工具回调失败(开始): {e}")
+            
+            start_time = time.time()
+            try:
+                # 执行原始工具
+                result = original_run(*args, **kwargs)
+                execution_time = time.time() - start_time
+                
+                # 🆕 发送成功状态
+                try:
+                    if self.tool_callback:
+                        self.tool_callback({
+                            "tool": tool_name,
+                            "status": "success",
+                            "input": kwargs if kwargs else args,
+                            "output": str(result)[:500],  # 限制输出长度
+                            "execution_time": execution_time,
+                            "timestamp": datetime.now()
+                        })
+                except Exception as e:
+                    logger.error(f"❌ 工具回调失败(成功): {e}")
+                
+                return result
+                
+            except Exception as e:
+                execution_time = time.time() - start_time
+                
+                # 🆕 发送错误状态
+                try:
+                    if self.tool_callback:
+                        self.tool_callback({
+                            "tool": tool_name,
+                            "status": "error",
+                            "input": kwargs if kwargs else args,
+                            "error": str(e),
+                            "execution_time": execution_time,
+                            "timestamp": datetime.now()
+                        })
+                except Exception as callback_error:
+                    logger.error(f"❌ 工具回调失败(错误): {callback_error}")
+                
+                # 重新抛出原始异常
+                raise
+        
+        # 替换工具的_run方法
+        tool._run = wrapped_run
+        
+        # 如果有异步方法，也进行包装
+        if original_arun:
+            async def wrapped_arun(*args, **kwargs):
+                """异步工具执行包装"""
+                tool_name = getattr(tool, 'name', str(tool))
+                
+                # 发送开始状态
+                try:
+                    if self.tool_callback:
+                        self.tool_callback({
+                            "tool": tool_name,
+                            "status": "running",
+                            "input": kwargs if kwargs else args,
+                            "timestamp": datetime.now()
+                        })
+                except Exception as e:
+                    logger.error(f"❌ 工具回调失败(异步开始): {e}")
+                
+                start_time = time.time()
+                try:
+                    result = await original_arun(*args, **kwargs)
+                    execution_time = time.time() - start_time
+                    
+                    try:
+                        if self.tool_callback:
+                            self.tool_callback({
+                                "tool": tool_name,
+                                "status": "success",
+                                "input": kwargs if kwargs else args,
+                                "output": str(result)[:500],
+                                "execution_time": execution_time,
+                                "timestamp": datetime.now()
+                            })
+                    except Exception as e:
+                        logger.error(f"❌ 工具回调失败(异步成功): {e}")
+                    
+                    return result
+                    
+                except Exception as e:
+                    execution_time = time.time() - start_time
+                    
+                    try:
+                        if self.tool_callback:
+                            self.tool_callback({
+                                "tool": tool_name,
+                                "status": "error",
+                                "input": kwargs if kwargs else args,
+                                "error": str(e),
+                                "execution_time": execution_time,
+                                "timestamp": datetime.now()
+                            })
+                    except Exception as callback_error:
+                        logger.error(f"❌ 工具回调失败(异步错误): {callback_error}")
+                    
+                    raise
+            
+            tool._arun = wrapped_arun
+        
+        return tool
+    
     def _load_tools_from_registry(self) -> List[Any]:
         """
         从工具注册器加载工具
@@ -137,6 +298,11 @@ class UnifiedAgent:
             logger.info(f"📦 开始加载 {len(enabled_tools)} 个工具...")
             tools = factory.create_tools(enabled_tools, parallel=parallel)
             
+            # 🆕 包装每个工具以支持回调
+            if self.tool_callback:
+                logger.info("🔧 包装工具以支持回调...")
+                tools = [self._wrap_tool_with_callback(tool) for tool in tools]
+            
             logger.info(f"✅ 成功加载 {len(tools)} 个工具")
             return tools
             
@@ -158,6 +324,12 @@ class UnifiedAgent:
             # 尝试使用智能体特定的工具配置
             tools = get_tools_for_agent("unified_agent")
             logger.info(f"✅ 使用智能体特定工具配置，加载 {len(tools)} 个工具")
+            
+            # 🆕 包装每个工具以支持回调
+            if self.tool_callback:
+                logger.info("🔧 包装工具以支持回调...")
+                tools = [self._wrap_tool_with_callback(tool) for tool in tools]
+            
             return tools
         except Exception as e:
             logger.warning(f"使用智能体特定工具配置失败: {e}")
@@ -165,6 +337,12 @@ class UnifiedAgent:
             default_tools = ["search", "time", "crewai_generator", "crewai_runtime"]
             tools = get_tools(default_tools) if self.agent_config.get("enable_tools", True) else []
             logger.info(f"✅ 使用默认工具配置，加载 {len(tools)} 个工具")
+            
+            # 🆕 包装每个工具以支持回调
+            if self.tool_callback:
+                logger.info("🔧 包装工具以支持回调...")
+                tools = [self._wrap_tool_with_callback(tool) for tool in tools]
+            
             return tools
     
     def _create_memory(self, memory_enabled: bool, redis_url: Optional[str], session_id: Optional[str]):
@@ -387,6 +565,11 @@ Thought:{agent_scratchpad}"""
             streaming_handler = SimpleStreamingHandler()
             callbacks = [streaming_handler]
         
+        # 🆕 如果有思维链处理器，添加到callbacks
+        if self.thinking_handler:
+            callbacks.append(self.thinking_handler)
+            logger.info("🧠 已添加思维链处理器到Agent callbacks")
+        
         # 创建基础的AgentExecutor
         executor = AgentExecutor(
             agent=self.agent,
@@ -396,7 +579,7 @@ Thought:{agent_scratchpad}"""
             # early_stopping_method="generate" 在某些 LangChain 版本不支持，已移除
             max_iterations=max_iterations,  # 从配置文件读取迭代次数
             max_execution_time=max_execution_time,  # 从配置文件读取执行时间
-            callbacks=callbacks if callbacks else None,  # 添加流式处理器
+            callbacks=callbacks if callbacks else None,  # 添加流式处理器和思维链处理器
             agent_kwargs={
                 "tool_names": [tool.name for tool in self.tools]
             }

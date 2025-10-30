@@ -75,7 +75,22 @@ export const useAppStore = create<AppState>((set) => ({
     }
   }),
 
-  addMessage: (message) => set((state) => ({ messages: [...state.messages, message] })),
+  addMessage: (message) => set((state) => {
+    const newMessages = [...state.messages, message]
+    
+    // 🆕 自动保存到localStorage
+    if (state.currentSession) {
+      const sessionData = {
+        sessionId: state.currentSession,
+        messages: newMessages,
+        timestamp: new Date().toISOString()
+      }
+      localStorage.setItem(`session_${state.currentSession}`, JSON.stringify(sessionData))
+      console.log(`💾 Auto-saved message to session ${state.currentSession}`)
+    }
+    
+    return { messages: newMessages }
+  }),
 
   updateMessage: (id, updates) =>
     set((state) => ({

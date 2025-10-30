@@ -6,7 +6,11 @@
 import sys
 import re
 from typing import Any, Dict, List, Optional
-from langchain.callbacks.base import BaseCallbackHandler
+# LangChain 1.0+ 导入路径
+try:
+    from langchain.callbacks.base import BaseCallbackHandler
+except ImportError:
+    from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.agents import AgentAction, AgentFinish
 from langchain_core.outputs import LLMResult
 

@@ -47,10 +47,11 @@ class DocumentGeneratorTool(BaseTool):
     
     def _run(
         self,
-        title: str,
-        content: str,
+        title: str = "",
+        content: str = "",
         filename: Optional[str] = None,
-        tags: Optional[str] = None
+        tags: Optional[str] = None,
+        **kwargs  # 🆕 接受额外参数，兼容不同调用方式
     ) -> str:
         """
         生成文档
@@ -64,6 +65,17 @@ class DocumentGeneratorTool(BaseTool):
         Returns:
             文档信息（包含下载链接）
         """
+        # 🆕 如果title为空，尝试从kwargs获取
+        if not title and "query" in kwargs:
+            title = kwargs["query"]
+        
+        # 🆕 如果content为空但有query，使用query作为内容
+        if not content and "query" in kwargs:
+            content = kwargs["query"]
+        
+        # 🆕 验证必需参数
+        if not title and not content:
+            return "❌ 错误：必须提供标题或内容。正确用法：generate_document(title='标题', content='内容')"
         try:
             # 构建完整的 Markdown 文档
             from datetime import datetime

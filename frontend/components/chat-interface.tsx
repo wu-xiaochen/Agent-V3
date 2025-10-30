@@ -11,70 +11,175 @@ import { useAppStore } from "@/lib/store"
 import { MessageBubble } from "./message-bubble"
 import { Card } from "@/components/ui/card"
 
-// ✅ 修复：工具调用状态组件 - 正确的折叠逻辑
-function ToolCallStatus({ toolCalls, isThinking }: { toolCalls: any[]; isThinking: boolean }) {
-  const [isExpanded, setIsExpanded] = useState(true)
+// 🆕 类似V0的思维链展示组件
+function ThinkingStatus({ 
+  stage, 
+  toolCalls 
+}: { 
+  stage: string | null
+  toolCalls: any[] 
+}) {
+  const [isExpanded, setIsExpanded] = useState(false)  // 默认折叠
 
-  // ✅ 修复：正确的条件判断 - 只有在没有内容时才隐藏
-  if (!isThinking && toolCalls.length === 0) return null
+  // 如果没有任何内容，不显示
+  if (!stage && toolCalls.length === 0) return null
+
+  // 判断是否还在思考中
+  const isThinking = stage && !["complete", null].includes(stage)
+  const hasCompletedTools = toolCalls.some(call => call.status === "success" || call.status === "error")
+  
+  // 🆕 计算总执行时间
+  const totalTime = toolCalls.reduce((sum, call) => sum + (call.execution_time || 0), 0)
 
   return (
-    <Card className="p-3 my-2 bg-muted/50">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          {isThinking && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
-          <span className="text-sm font-medium text-muted-foreground">
-            {isThinking ? "🤔 AI正在思考..." : "✅ 工具调用完成"}
-          </span>
-        </div>
-        {/* ✅ 修复：只在有工具调用时显示折叠按钮 */}
-        {toolCalls.length > 0 && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={() => setIsExpanded(!isExpanded)}
-          >
-            {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-          </Button>
-        )}
-      </div>
-
-      {/* ✅ 修复：只在展开且有工具调用时显示内容 */}
-      {isExpanded && toolCalls.length > 0 && (
-        <div className="space-y-2 text-xs">
-          {toolCalls.map((call, index) => (
-            <div key={index} className="flex items-start gap-2 p-2 bg-background rounded">
-              <div className={`mt-0.5 h-2 w-2 rounded-full ${
-                call.status === "success" ? "bg-green-500" :
-                call.status === "error" ? "bg-red-500" :
-                "bg-yellow-500 animate-pulse"
-              }`} />
-              <div className="flex-1">
-                <p className="font-medium">{call.tool}</p>
-                {call.input && <p className="text-muted-foreground">输入: {JSON.stringify(call.input)}</p>}
-                {call.output && <p className="text-muted-foreground mt-1">输出: {call.output}</p>}
-                {call.error && <p className="text-red-500 mt-1">错误: {call.error}</p>}
-              </div>
-            </div>
-          ))}
+    <div className="my-3 space-y-1.5">
+      {/* 🆕 思考阶段指示器 - 类似V0 */}
+      {isThinking && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span>Thought for {Math.ceil(totalTime)}s</span>
         </div>
       )}
-    </Card>
+      
+      {/* 🆕 工具调用步骤 - 类似V0的简洁风格 */}
+      {toolCalls.map((call, index) => {
+        const isRunning = call.status === "running"
+        const isSuccess = call.status === "success"
+        const isError = call.status === "error"
+        
+        // 生成步骤描述
+        const getStepDescription = () => {
+          const toolName = call.tool
+          if (toolName === "time") return "Checked current time"
+          if (toolName === "search") return "Searched information"
+          if (toolName === "calculator") return "Calculated result"
+          if (toolName === "generate_document") return "Generated document"
+          if (toolName.includes("crewai")) return "Built intelligent agent team"
+          return `Used ${toolName}`
+        }
+        
+        return (
+          <div 
+            key={index} 
+            className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 px-2 py-1 rounded transition-colors"
+            onClick={() => setIsExpanded(!isExpanded)}
+          >
+            {isRunning && <Loader2 className="h-3.5 w-3.5 animate-spin text-orange-500" />}
+            {isSuccess && <span className="text-xs">🔧</span>}
+            {isError && <span className="text-xs text-red-500">⚠️</span>}
+            <span className="text-muted-foreground flex-1">
+              {getStepDescription()}
+            </span>
+            {!isRunning && (
+              <button className="text-muted-foreground hover:text-foreground">
+                <span className="text-xs">•••</span>
+              </button>
+            )}
+          </div>
+        )
+      })}
+      
+      {/* 🆕 完成状态 - 显示总执行时间 */}
+      {!isThinking && toolCalls.length > 0 && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="text-xs">⚡</span>
+          <span>Worked for {totalTime.toFixed(1)}s</span>
+        </div>
+      )}
+      
+      {/* 🆕 展开详情 - 点击步骤时显示 */}
+      {isExpanded && toolCalls.length > 0 && (
+        <Card className="p-3 mt-2 bg-muted/30 space-y-3">
+          {toolCalls.map((call, index) => (
+            <div key={index} className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold">
+                  {index + 1}
+                </div>
+                <span className="font-medium text-sm">{call.tool}</span>
+                {call.execution_time && (
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    {call.execution_time.toFixed(2)}s
+                  </span>
+                )}
+              </div>
+              
+              {call.input && (
+                <div className="ml-7 text-xs">
+                  <p className="text-muted-foreground mb-1">Input:</p>
+                  <div className="bg-background px-2 py-1 rounded font-mono">
+                    {typeof call.input === 'object' ? JSON.stringify(call.input, null, 2) : call.input}
+                  </div>
+                </div>
+              )}
+              
+              {(call.output || call.error) && (
+                <div className="ml-7 text-xs">
+                  <p className="text-muted-foreground mb-1">
+                    {call.error ? "Error:" : "Output:"}
+                  </p>
+                  <div className={`px-2 py-1 rounded ${
+                    call.error ? "bg-red-50 text-red-900" : "bg-background"
+                  }`}>
+                    {call.error || call.output}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </Card>
+      )}
+    </div>
   )
 }
 
 export function ChatInterface() {
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [toolCalls, setToolCalls] = useState<any[]>([])
+  const [thinkingChain, setThinkingChain] = useState<any[]>([])  // 🆕 完整思维链
   const [isThinking, setIsThinking] = useState(false)
+  const [messageThinkingChains, setMessageThinkingChains] = useState<Record<string, any[]>>({})  // 🆕 每条消息的思维链
   const [abortController, setAbortController] = useState<AbortController | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { messages, addMessage, currentSession } = useAppStore()
+
+  // 🆕 监听会话切换，清理状态并加载该会话的思维链历史
+  useEffect(() => {
+    console.log("🔄 Session changed to:", currentSession)
+    
+    // 切换会话时清理所有进行中的状态
+    setIsLoading(false)
+    setIsThinking(false)
+    setThinkingChain([])
+    setUploadedFiles([])
+    
+    // 中断正在进行的请求
+    if (abortController) {
+      console.log("🛑 Aborting ongoing request due to session change")
+      abortController.abort()
+      setAbortController(null)
+    }
+    
+    // 🆕 加载该会话的思维链历史
+    if (currentSession) {
+      const savedChains = localStorage.getItem(`thinking_chains_${currentSession}`)
+      if (savedChains) {
+        try {
+          const parsedChains = JSON.parse(savedChains)
+          setMessageThinkingChains(parsedChains)
+          console.log(`📥 加载思维链历史: ${Object.keys(parsedChains).length} 条消息`)
+        } catch (e) {
+          console.error("加载思维链历史失败:", e)
+          setMessageThinkingChains({})
+        }
+      } else {
+        setMessageThinkingChains({})
+      }
+    }
+  }, [currentSession])
 
   // ✅ 真正修复：直接操作Radix UI的Viewport元素
   useEffect(() => {
@@ -100,7 +205,7 @@ export function ChatInterface() {
     // 使用setTimeout延迟确保DOM完全渲染
     const timer = setTimeout(scrollToBottom, 100)
     return () => clearTimeout(timer)
-  }, [messages, toolCalls, isThinking])
+  }, [messages, thinkingChain, isThinking])
 
   const handleStop = () => {
     if (abortController) {
@@ -109,7 +214,7 @@ export function ChatInterface() {
       setAbortController(null)
       setIsLoading(false)
       setIsThinking(false)
-      setToolCalls([])
+      setThinkingChain([])
       
       const stopMessage = {
         id: `msg-${Date.now()}-stop`,
@@ -146,10 +251,12 @@ export function ChatInterface() {
 
     addMessage(userMessage)
     const messageContent = input
+    const requestSessionId = currentSession || "default"
+    const currentMessageId = userMessage.id  // 🆕 保存当前消息ID
     setInput("")
     setIsLoading(true)
     setIsThinking(true)
-    setToolCalls([])
+    setThinkingChain([])
     
     // ✅ 清空已上传的文件（发送后）
     setUploadedFiles([])
@@ -158,8 +265,82 @@ export function ChatInterface() {
     const controller = new AbortController()
     setAbortController(controller)
 
+    // 🆕 启动思维链轮询
+    let pollInterval: NodeJS.Timeout | null = null
+    let pollCount = 0
+    const MAX_POLLS = 240 // 最多轮询2分钟 (每500ms一次)
+    
     try {
       const { api } = await import("@/lib/api")
+      
+      // 🆕 清空后端的思维链历史（开始新对话）
+      await api.thinking.clearThinkingChain(requestSessionId)
+      
+      // 🆕 开始轮询思维链历史
+      pollInterval = setInterval(async () => {
+        try {
+          pollCount++
+          console.log(`🔄 轮询思维链 #${pollCount}:`, requestSessionId)
+          const chainData = await api.thinking.getThinkingChain(requestSessionId)
+          
+          console.log("📦 思维链数据:", chainData)
+          
+          if (chainData.success && chainData.thinking_chain.length > 0) {
+            // 🆕 转换思维链数据为工具调用格式（用于UI展示）
+            const toolSteps = chainData.thinking_chain
+              .filter(step => step.type === 'action' || step.type === 'observation')
+              .reduce((acc: any[], step) => {
+                if (step.type === 'action') {
+                  // 找到或创建工具调用记录
+                  const existingTool = acc.find(t => t.tool === step.tool && t.step === step.step)
+                  if (!existingTool) {
+                    acc.push({
+                      tool: step.tool,
+                      step: step.step,
+                      status: step.status || 'running',
+                      input: step.tool_input,
+                      timestamp: step.timestamp
+                    })
+                  }
+                } else if (step.type === 'observation') {
+                  // 更新对应的工具调用记录
+                  const tool = acc.find(t => t.step === step.step)
+                  if (tool) {
+                    tool.status = step.status || 'success'
+                    tool.output = step.content
+                    tool.error = step.error
+                    tool.execution_time = step.execution_time
+                  }
+                }
+                return acc
+              }, [])
+            
+            console.log("🔧 转换后的工具步骤:", toolSteps)
+            setThinkingChain(toolSteps)
+            
+            // 检查是否已完成
+            const hasChainEnd = chainData.thinking_chain.some(step => step.type === 'chain_end')
+            if (hasChainEnd && pollInterval) {
+              console.log("✅ 思维链已完成，停止轮询")
+              clearInterval(pollInterval)
+              pollInterval = null
+            }
+          } else {
+            console.log("⚠️  思维链数据为空或失败:", chainData)
+          }
+          
+          // 达到最大轮询次数时停止
+          if (pollCount >= MAX_POLLS) {
+            console.warn("⚠️  达到最大轮询次数，停止轮询")
+            if (pollInterval) {
+              clearInterval(pollInterval)
+              pollInterval = null
+            }
+          }
+        } catch (pollError) {
+          console.error("轮询思维链失败:", pollError)
+        }
+      }, 500)
       
       // ✅ 修复：调用API时携带附件信息
       console.log("🚀 Sending message:", {
@@ -180,28 +361,84 @@ export function ChatInterface() {
 
       console.log("📥 Response received:", response)
 
+      // 🆕 检查会话是否已切换
+      if (currentSession !== requestSessionId) {
+        console.log("⚠️  会话已切换，忽略此响应", {
+          request: requestSessionId,
+          current: currentSession
+        })
+        return
+      }
+
       if (response.success) {
-        // 解析响应中的工具调用信息（如果有）
         const responseText = response.response
         
-        // TODO: 这里应该从后端获取真实的工具调用信息
-        // 现在先模拟一下
-        if (responseText.includes("CrewAI") || responseText.includes("crew")) {
-          setToolCalls([
-            { tool: "CrewAI Runtime", status: "running", input: { task: messageContent } },
-          ])
-          
-          // 模拟工具调用过程
-          await new Promise(resolve => setTimeout(resolve, 1000))
-          
-          setToolCalls(prev => prev.map(call => ({
-            ...call,
-            status: "success",
-            output: "CrewAI任务执行成功"
-          })))
+        // 🆕 等待最后一次轮询完成（延迟1秒）
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        // 🆕 再获取一次最终的思维链数据
+        let finalToolSteps: any[] = []
+        try {
+          const finalChainData = await api.thinking.getThinkingChain(requestSessionId)
+          if (finalChainData.success && finalChainData.thinking_chain.length > 0) {
+            finalToolSteps = finalChainData.thinking_chain
+              .filter(step => step.type === 'action' || step.type === 'observation')
+              .reduce((acc: any[], step) => {
+                if (step.type === 'action') {
+                  const existingTool = acc.find(t => t.tool === step.tool && t.step === step.step)
+                  if (!existingTool) {
+                    acc.push({
+                      tool: step.tool,
+                      step: step.step,
+                      status: step.status || 'running',
+                      input: step.tool_input,
+                      timestamp: step.timestamp
+                    })
+                  }
+                } else if (step.type === 'observation') {
+                  const tool = acc.find(t => t.step === step.step)
+                  if (tool) {
+                    tool.status = step.status || 'success'
+                    tool.output = step.content
+                    tool.error = step.error
+                    tool.execution_time = step.execution_time
+                  }
+                }
+                return acc
+              }, [])
+            
+            setThinkingChain(finalToolSteps)
+            console.log("🔍 最终思维链数据:", finalToolSteps)
+          }
+        } catch (err) {
+          console.error("获取最终思维链失败:", err)
         }
-
+        
+        // 🆕 停止thinking状态
         setIsThinking(false)
+        
+        // 🆕 立即保存当前消息的思维链（使用finalToolSteps，不依赖state）
+        console.log("💾 准备保存思维链:", {
+          messageId: currentMessageId,
+          chainLength: finalToolSteps.length,
+          chain: finalToolSteps
+        })
+        
+        if (finalToolSteps.length > 0) {
+          setMessageThinkingChains(prev => ({
+            ...prev,
+            [currentMessageId]: finalToolSteps
+          }))
+          
+          // 🆕 同时保存到localStorage
+          const savedChains = localStorage.getItem(`thinking_chains_${currentSession}`) || '{}'
+          const parsedChains = JSON.parse(savedChains)
+          parsedChains[currentMessageId] = finalToolSteps
+          localStorage.setItem(`thinking_chains_${currentSession}`, JSON.stringify(parsedChains))
+          console.log(`✅ 保存思维链记录成功: ${currentMessageId} - ${finalToolSteps.length} 个步骤`)
+        } else {
+          console.warn("⚠️ 思维链为空，不保存")
+        }
         
         const aiMessage = {
           id: `msg-${Date.now()}-ai`,
@@ -239,6 +476,11 @@ export function ChatInterface() {
       }
       addMessage(errorMessage)
     } finally {
+      // 🆕 清理轮询
+      if (pollInterval) {
+        clearInterval(pollInterval)
+      }
+      
       setIsLoading(false)
       setAbortController(null)
     }
@@ -252,14 +494,14 @@ export function ChatInterface() {
   }
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex-1 flex flex-col h-screen">
       <div className="border-b border-border p-4 bg-card flex-shrink-0">
         <h2 className="text-lg font-semibold text-card-foreground">Chat Assistant</h2>
         <p className="text-sm text-muted-foreground">Ask me anything about your AI agents</p>
       </div>
 
       <ScrollArea className="flex-1 p-4 overflow-hidden" ref={scrollAreaRef}>
-        <div className="max-w-4xl mx-auto space-y-4">
+        <div className="w-full max-w-5xl mx-auto space-y-4 px-4">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full text-center">
               <div className="space-y-2">
@@ -269,20 +511,59 @@ export function ChatInterface() {
             </div>
           ) : (
             <>
-              {messages.map((message) => <MessageBubble key={message.id} message={message} />)}
-              
-              {/* 工具调用状态 */}
-              {(toolCalls.length > 0 || isThinking) && (
-                <ToolCallStatus toolCalls={toolCalls} isThinking={isThinking} />
-              )}
+              {messages.map((message, index) => {
+                // 🆕 获取该消息对应的思维链
+                const messageChain = message.role === "user" ? (
+                  // 如果是最后一条用户消息且正在思考，使用当前的thinkingChain
+                  (index === messages.length - 1 && isThinking) ? thinkingChain :
+                  // 否则从历史记录中获取
+                  (messageThinkingChains[message.id] || [])
+                ) : []
+                
+                const hasChain = messageChain.length > 0
+                const shouldShowThinking = message.role === "user" && index === messages.length - 1 && isThinking
+                
+                // 🔍 调试日志
+                if (message.role === "user") {
+                  console.log(`📝 消息 ${message.id}:`, {
+                    content: message.content.substring(0, 30),
+                    isLastMessage: index === messages.length - 1,
+                    isThinking,
+                    hasChain,
+                    shouldShowThinking,
+                    messageChain,
+                    currentThinkingChain: thinkingChain
+                  })
+                }
+                
+                return (
+                  <div key={message.id}>
+                    {/* 用户或AI消息 */}
+                    <MessageBubble message={message} />
+                    
+                    {/* 🆕 在用户消息后显示该消息对应的思维链 */}
+                    {message.role === "user" && (hasChain || shouldShowThinking) && (
+                      <div className="flex gap-3 mb-4">
+                        {/* AI头像 */}
+                        <div className="flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <span className="text-sm">🤖</span>
+                          </div>
+                        </div>
+                        
+                        {/* 思维链内容 */}
+                        <div className="flex-1">
+                          <ThinkingStatus 
+                            stage={shouldShowThinking ? "thinking" : null} 
+                            toolCalls={messageChain} 
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </>
-          )}
-          
-          {isLoading && toolCalls.length === 0 && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">AI is thinking...</span>
-            </div>
           )}
           
           {/* ✅ 滚动锚点 - 确保自动滚动到最底部 */}
@@ -291,7 +572,7 @@ export function ChatInterface() {
       </ScrollArea>
 
       <div className="border-t border-border p-4 bg-card flex-shrink-0">
-        <div className="max-w-4xl mx-auto space-y-2">
+        <div className="w-full max-w-5xl mx-auto space-y-2 px-4">
           {/* 文件附件预览 - 类似 Cursor 的简洁设计 */}
           {uploadedFiles.length > 0 && (
             <div className="flex flex-wrap gap-2 pb-2">
@@ -363,25 +644,15 @@ export function ChatInterface() {
                                   ...f, 
                                   status: 'success' as const, 
                                   url: result.download_url,
-                                  parsed: result.parsed_content
+                                  parsed: result.parsed_content,
+                                  filename: result.filename  // 🆕 保存文件名
                                 }
                               : f
                           )
                         )
                         
-                        // 如果文档解析成功，显示解析结果
-                        if (result.parsed_content) {
-                          const parsedMessage = {
-                            id: `msg-${Date.now()}-parsed`,
-                            role: "assistant" as const,
-                            content: `📄 **${result.filename}** 解析成功！\n\n` +
-                                   `**类型**: ${result.parsed_content.type}\n\n` +
-                                   `**内容摘要**:\n${result.parsed_content.summary}\n\n` +
-                                   `💡 您可以在对话中引用这个文档的内容。`,
-                            timestamp: new Date(),
-                          }
-                          addMessage(parsedMessage)
-                        }
+                        // 🆕 不再自动显示解析结果，等待用户发送消息时再使用
+                        console.log(`✅ 文件上传成功: ${result.filename}`)
                       } else {
                         throw new Error(result.error || 'Upload failed')
                       }
