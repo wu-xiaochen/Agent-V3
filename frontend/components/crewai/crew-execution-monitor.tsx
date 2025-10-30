@@ -63,6 +63,12 @@ export function CrewExecutionMonitor({
   const [duration, setDuration] = useState<number>(0)
   const [error, setError] = useState<string | null>(null)
   
+  // 日志过滤
+  const [logFilter, setLogFilter] = useState<'all' | 'info' | 'success' | 'error' | 'warning'>('all')
+  const filteredLogs = logFilter === 'all' 
+    ? logs 
+    : logs.filter(log => log.type === logFilter)
+  
   const eventSourceRef = useRef<EventSource | null>(null)
   const logsEndRef = useRef<HTMLDivElement>(null)
 
@@ -322,29 +328,71 @@ export function CrewExecutionMonitor({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-semibold">Execution Logs</h4>
-          <Badge variant="outline">{logs.length} entries</Badge>
+          <div className="flex items-center gap-2">
+            {/* 日志过滤器 */}
+            <div className="flex gap-1">
+              <Button
+                size="sm"
+                variant={logFilter === 'all' ? 'default' : 'outline'}
+                onClick={() => setLogFilter('all')}
+                className="h-7 px-2 text-xs"
+              >
+                All ({logs.length})
+              </Button>
+              <Button
+                size="sm"
+                variant={logFilter === 'info' ? 'default' : 'outline'}
+                onClick={() => setLogFilter('info')}
+                className="h-7 px-2 text-xs"
+              >
+                Info ({logs.filter(l => l.type === 'info').length})
+              </Button>
+              <Button
+                size="sm"
+                variant={logFilter === 'success' ? 'default' : 'outline'}
+                onClick={() => setLogFilter('success')}
+                className="h-7 px-2 text-xs"
+              >
+                Success ({logs.filter(l => l.type === 'success').length})
+              </Button>
+              <Button
+                size="sm"
+                variant={logFilter === 'error' ? 'default' : 'outline'}
+                onClick={() => setLogFilter('error')}
+                className="h-7 px-2 text-xs"
+              >
+                Error ({logs.filter(l => l.type === 'error').length})
+              </Button>
+            </div>
+          </div>
         </div>
 
         <ScrollArea className="h-[300px] rounded-md border p-4">
           <div className="space-y-2">
-            {logs.length === 0 ? (
+            {filteredLogs.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
-                No logs yet. Click Start to begin execution.
+                {logs.length === 0 
+                  ? "No logs yet. Click Start to begin execution."
+                  : `No ${logFilter} logs found.`
+                }
               </p>
             ) : (
-              logs.map((log, index) => (
+              filteredLogs.map((log, index) => (
                 <div
                   key={index}
-                  className={`flex gap-2 text-sm ${
+                  className={`flex gap-2 text-sm p-2 rounded hover:bg-muted/50 transition-colors ${
                     log.type === 'error' ? 'text-destructive' :
                     log.type === 'success' ? 'text-green-600' :
                     log.type === 'warning' ? 'text-yellow-600' :
                     'text-foreground'
                   }`}
                 >
-                  <span className="text-muted-foreground text-xs">
+                  <span className="text-muted-foreground text-xs font-mono shrink-0">
                     {new Date(log.timestamp).toLocaleTimeString()}
                   </span>
+                  <Badge variant="outline" className="shrink-0 h-5 text-xs">
+                    {log.type}
+                  </Badge>
                   <span className="flex-1">{log.message}</span>
                 </div>
               ))
@@ -356,13 +404,120 @@ export function CrewExecutionMonitor({
 
       {/* Result */}
       {result && (
-        <div className="mt-6 space-y-2">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-green-600" />
-            <h4 className="text-sm font-semibold">Execution Result</h4>
+        <div className="mt-6 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <h4 className="text-sm font-semibold">Execution Result</h4>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  navigator.clipboard.writeText(result)
+                }}
+              >
+                Copy
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  // 下载为文本文件
+                  const blob = new Blob([result], { type: 'text/plain' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `crew-result-${executionId || 'unknown'}.txt`
+                  document.body.appendChild(a)
+                  a.click()
+                  document.body.removeChild(a)
+                  URL.revokeObjectURL(url)
+                }}
+              >
+                Download TXT
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  // 下载为Markdown文件
+                  const markdown = `# CrewAI Execution Result\n\n**Execution ID**: ${executionId}\n**Duration**: ${duration.toFixed(2)}s\n**Timestamp**: ${new Date().toISOString()}\n\n## Result\n\n${result}\n\n## Logs\n\n${logs.map(log => `- [${new Date(log.timestamp).toLocaleTimeString()}] ${log.message}`).join('\n')}`
+                  const blob = new Blob([markdown], { type: 'text/markdown' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `crew-result-${executionId || 'unknown'}.md`
+                  document.body.appendChild(a)
+                  a.click()
+                  document.body.removeChild(a)
+                  URL.revokeObjectURL(url)
+                }}
+              >
+                Download MD
+              </Button>
+            </div>
           </div>
           <Card className="p-4 bg-muted/50">
-            <pre className="text-sm whitespace-pre-wrap">{result}</pre>
+            <div className="space-y-3">
+              {/* 尝试检测JSON并格式化 */}
+              {(() => {
+                try {
+                  // 尝试解析为JSON
+                  const jsonMatch = result.match(/\{[\s\S]*\}|\[[\s\S]*\]/)
+                  if (jsonMatch) {
+                    const parsed = JSON.parse(jsonMatch[0])
+                    return (
+                      <div className="space-y-2">
+                        <div className="text-xs text-muted-foreground">Formatted JSON:</div>
+                        <pre className="text-sm overflow-x-auto p-3 bg-background rounded border">
+                          <code className="language-json">
+                            {JSON.stringify(parsed, null, 2)}
+                          </code>
+                        </pre>
+                      </div>
+                    )
+                  }
+                } catch (e) {
+                  // 不是JSON，继续
+                }
+                
+                // 检测代码块
+                const codeBlockMatch = result.match(/```(\w+)?\n([\s\S]*?)```/)
+                if (codeBlockMatch) {
+                  const language = codeBlockMatch[1] || 'text'
+                  const code = codeBlockMatch[2]
+                  return (
+                    <div className="space-y-2">
+                      <div className="text-xs text-muted-foreground">Code Block ({language}):</div>
+                      <pre className="text-sm overflow-x-auto p-3 bg-background rounded border">
+                        <code className={`language-${language}`}>{code}</code>
+                      </pre>
+                    </div>
+                  )
+                }
+                
+                // 普通文本，检测段落
+                const paragraphs = result.split(/\n\n+/)
+                if (paragraphs.length > 1) {
+                  return (
+                    <div className="space-y-3">
+                      {paragraphs.map((para, idx) => (
+                        <div key={idx} className="text-sm leading-relaxed">
+                          {para.split('\n').map((line, lineIdx) => (
+                            <div key={lineIdx}>{line || '\u00A0'}</div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                }
+                
+                // 单段文本
+                return <pre className="text-sm whitespace-pre-wrap leading-relaxed">{result}</pre>
+              })()}
+            </div>
           </Card>
         </div>
       )}
