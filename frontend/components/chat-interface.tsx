@@ -146,6 +146,10 @@ export function ChatInterface() {
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { messages, addMessage, currentSession } = useAppStore()
+  
+  // 🆕 CrewAI画布状态
+  const [crewDrawerOpen, setCrewDrawerOpen] = useState(false)
+  const [pendingCrewConfig, setPendingCrewConfig] = useState<any | null>(null)
 
   // 🆕 监听会话切换，清理状态并加载该会话的思维链历史
   useEffect(() => {
@@ -446,8 +450,20 @@ export function ChatInterface() {
           role: "assistant" as const,
           content: responseText,
           timestamp: new Date(),
+          metadata: response.metadata  // 🆕 保存metadata
         }
         addMessage(aiMessage)
+        
+        // 🆕 检查是否需要自动打开CrewAI画布
+        if (response.metadata && response.metadata.action === "open_canvas") {
+          console.log("🎨 检测到CrewAI生成，准备自动打开画布", response.metadata)
+          // 保存待加载的Crew配置
+          setPendingCrewConfig(response.metadata.crew_config)
+          // 延迟打开画布（让用户看到消息后再打开）
+          setTimeout(() => {
+            setCrewDrawerOpen(true)
+          }, 1500)
+        }
       } else {
         setIsThinking(false)
         const errorMessage = {
@@ -502,7 +518,10 @@ export function ChatInterface() {
           <p className="text-sm text-muted-foreground">Ask me anything about your AI agents</p>
         </div>
         <div className="flex items-center gap-2">
-          <CrewDrawer />
+          <CrewDrawer 
+            open={crewDrawerOpen} 
+            onOpenChange={setCrewDrawerOpen}
+          />
         </div>
       </div>
 

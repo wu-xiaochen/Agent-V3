@@ -708,13 +708,24 @@ class CrewAIGeneratorTool(BaseTool):
         config_dict = standard_config.to_dict()
         
         # ✅ 自动保存配置（如果启用）
+        crew_id = self._generate_config_id(crew_name)
         if auto_save or output_file:
             saved_path = self._auto_save_config(config_dict, crew_name, output_file)
             config_dict["saved_config_path"] = saved_path
-            config_dict["config_id"] = self._generate_config_id(crew_name)
+            config_dict["config_id"] = crew_id
             logger.info(f"✅ CrewAI配置已保存: {saved_path} (ID: {config_dict['config_id']})")
         
-        return config_dict
+        # 🆕 返回特殊标记，让前端自动打开画布
+        result = {
+            "success": True,
+            "crew_id": crew_id,
+            "crew_name": crew_name,
+            "crew_config": config_dict,
+            "action": "open_canvas",  # ← 前端识别此标记自动打开CrewAI画布
+            "message": f"✅ 已生成Crew团队: {crew_name}\n\n包含 {len(config_dict.get('crewai_config', {}).get('agents', []))} 个Agent和 {len(config_dict.get('crewai_config', {}).get('tasks', []))} 个Task\n\n点击右上角CrewAI按钮查看详情，或等待自动打开画布"
+        }
+        
+        return result
     
     def _auto_save_config(self, config_dict: Dict[str, Any], crew_name: str, output_file: Optional[str] = None) -> str:
         """

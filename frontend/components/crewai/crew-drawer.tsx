@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Users, X, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,8 +18,17 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useToast } from "@/hooks/use-toast"
 import { CrewCanvas } from "./crew-canvas"
 import type { CrewConfig } from "@/lib/types/crewai"
+import { api } from "@/lib/api"
+import { 
+  convertCanvasToCrewConfig, 
+  convertCrewConfigToCanvas,
+  validateCrewConfig,
+  generateCrewId
+} from "@/lib/crewai/canvas-converter"
+import type { Node, Edge } from "@xyflow/react"
 
 interface CrewDrawerProps {
   open?: boolean
@@ -30,10 +39,51 @@ export function CrewDrawer({ open, onOpenChange }: CrewDrawerProps) {
   const [crews, setCrews] = useState<CrewConfig[]>([])
   const [selectedCrew, setSelectedCrew] = useState<CrewConfig | null>(null)
   const [isCreating, setIsCreating] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [canvasNodes, setCanvasNodes] = useState<Node[]>([])
+  const [canvasEdges, setCanvasEdges] = useState<Edge[]>([])
+  const { toast } = useToast()
+
+  // 加载Crew列表
+  useEffect(() => {
+    if (open) {
+      loadCrews()
+    }
+  }, [open])
+
+  const loadCrews = async () => {
+    try {
+      setLoading(true)
+      const result = await api.crewai.listCrews()
+      if (result.success) {
+        // 转换为CrewConfig格式（简化版）
+        const crewList: CrewConfig[] = result.crews.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          description: c.description,
+          agents: [],
+          tasks: [],
+          process: "sequential",
+          createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
+        }))
+        setCrews(crewList)
+      }
+    } catch (error) {
+      console.error("加载Crew列表失败:", error)
+      toast({
+        title: "加载失败",
+        description: "无法加载Crew列表，请稍后重试",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleCreateNew = () => {
     const newCrew: CrewConfig = {
-      id: `crew-${Date.now()}`,
+      id: generateCrewId(),
       name: "New Crew",
       description: "Describe your crew",
       agents: [],
@@ -42,19 +92,111 @@ export function CrewDrawer({ open, onOpenChange }: CrewDrawerProps) {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
-    setCrews([...crews, newCrew])
     setSelectedCrew(newCrew)
+    setCanvasNodes([])
+    setCanvasEdges([])
     setIsCreating(true)
   }
 
-  const handleSave = () => {
-    // TODO: API call to save crew
-    setIsCreating(false)
+  const handleLoadCrew = async (crewId: string) => {
+    try {
+      setLoading(true)
+      const result = await api.crewai.getCrew(crewId)
+      if (result.success && result.crew) {
+        setSelectedCrew(result.crew)
+        // 转换为Canvas数据
+        const { nodes, edges } = convertCrewConfigToCanvas(result.crew)
+        setCanvasNodes(nodes)
+        setCanvasEdges(edges)
+        setIsCreating(false)
+      }
+    } catch (error) {
+      console.error("加载Crew详情失败:", error)
+      toast({
+        title: "加载失败",
+        description: "无法加载Crew详情，请稍后重试",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleRun = () => {
-    // TODO: API call to run crew
-    console.log("Running crew:", selectedCrew)
+  const handleSave = async () => {
+    if (!selectedCrew) return
+
+    try {
+      setLoading(true)
+      
+      // 从Canvas收集当前数据
+      const crewConfig = convertCanvasToCrewConfig(canvasNodes, canvasEdges, {
+        id: selectedCrew.id,
+        name: selectedCrew.name,
+        description: selectedCrew.description,
+      })
+
+      // 验证配置
+      const validation = validateCrewConfig(crewConfig)
+      if (!validation.valid) {
+        toast({
+          title: "验证失败",
+          description: validation.errors.join("\n"),
+          variant: "destructive",
+        })
+        return
+      }
+
+      // 保存到后端
+      const result = await api.crewai.saveCrew(crewConfig)
+      if (result.success) {
+        toast({
+          title: "保存成功",
+          description: `Crew "${crewConfig.name}" 已保存`,
+        })
+        setIsCreating(false)
+        // 刷新列表
+        await loadCrews()
+      }
+    } catch (error) {
+      console.error("保存Crew失败:", error)
+      toast({
+        title: "保存失败",
+        description: "无法保存Crew配置，请稍后重试",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRun = async () => {
+    if (!selectedCrew) return
+
+    try {
+      setLoading(true)
+      const result = await api.crewai.executeCrew(selectedCrew.id, {})
+      if (result.success) {
+        toast({
+          title: "执行成功",
+          description: `Crew已开始执行，执行ID: ${result.execution_id}`,
+        })
+      }
+    } catch (error) {
+      console.error("执行Crew失败:", error)
+      toast({
+        title: "执行失败",
+        description: "无法执行Crew，请稍后重试",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 处理Canvas数据更新
+  const handleCanvasChange = (nodes: Node[], edges: Edge[]) => {
+    setCanvasNodes(nodes)
+    setCanvasEdges(edges)
   }
 
   return (
@@ -100,10 +242,7 @@ export function CrewDrawer({ open, onOpenChange }: CrewDrawerProps) {
                       className={`p-3 rounded-lg border cursor-pointer transition-all hover:border-primary ${
                         selectedCrew?.id === crew.id ? "border-primary bg-accent" : ""
                       }`}
-                      onClick={() => {
-                        setSelectedCrew(crew)
-                        setIsCreating(false)
-                      }}
+                      onClick={() => handleLoadCrew(crew.id)}
                     >
                       <div className="font-semibold text-sm">{crew.name}</div>
                       <div className="text-xs text-muted-foreground line-clamp-2">
@@ -160,11 +299,9 @@ export function CrewDrawer({ open, onOpenChange }: CrewDrawerProps) {
                       <div className="h-[calc(100vh-240px)]">
                         <CrewCanvas
                           crewId={selectedCrew.id}
-                          initialNodes={[]}
-                          initialEdges={[]}
-                          onSave={(nodes, edges) => {
-                            console.log("Saving:", nodes, edges)
-                          }}
+                          initialNodes={canvasNodes}
+                          initialEdges={canvasEdges}
+                          onSave={handleCanvasChange}
                           onRun={handleRun}
                         />
                       </div>
