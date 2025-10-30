@@ -139,7 +139,16 @@ function ThinkingStatus({
 export function ChatInterface() {
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  // 🆕 改为按会话存储思维状态
+  const [abortController, setAbortController] = useState<AbortController | null>(null)
+  const [uploadedFiles, setUploadedFiles] = useState<any[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  
+  // 🆕 首先获取全局状态（包括currentSession）
+  const { messages, addMessage, currentSession, crewDrawerOpen, setCrewDrawerOpen } = useAppStore()
+  
+  // 🆕 改为按会话存储思维状态（现在currentSession已定义）
   const [sessionThinkingStates, setSessionThinkingStates] = useState<Record<string, {
     isThinking: boolean
     thinkingChain: any[]
@@ -162,12 +171,6 @@ export function ChatInterface() {
       }
     }))
   }
-  const [abortController, setAbortController] = useState<AbortController | null>(null)
-  const [uploadedFiles, setUploadedFiles] = useState<any[]>([])
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const scrollAreaRef = useRef<HTMLDivElement>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const { messages, addMessage, currentSession, crewDrawerOpen, setCrewDrawerOpen } = useAppStore()
   
   // 🆕 CrewAI画布状态（pendingCrewConfig保留为局部状态）
   const [pendingCrewConfig, setPendingCrewConfig] = useState<any | null>(null)
