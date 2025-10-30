@@ -177,18 +177,19 @@ export function ChatInterface() {
   useEffect(() => {
     console.log("🔄 Session changed to:", currentSession)
     
-    // 切换会话时清理所有进行中的状态
+    // 切换会话时清理UI状态，但不中断请求（让后台继续）
     setIsLoading(false)
     setIsThinking(false)
     setThinkingChain([])
     setUploadedFiles([])
     
-    // 中断正在进行的请求
-    if (abortController) {
-      console.log("🛑 Aborting ongoing request due to session change")
-      abortController.abort()
-      setAbortController(null)
-    }
+    // ⚠️ 不再中断请求，让AI在后台继续生成
+    // if (abortController) {
+    //   console.log("🛑 Aborting ongoing request due to session change")
+    //   abortController.abort()
+    //   setAbortController(null)
+    // }
+    console.log("✅ 会话切换：保留后台请求，让AI继续生成")
     
     // 🆕 加载该会话的思维链历史
     if (currentSession) {
