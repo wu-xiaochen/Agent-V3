@@ -1,11 +1,20 @@
 'use client'
 
-import * as React from 'react'
-import {
-  ThemeProvider as NextThemesProvider,
-  type ThemeProviderProps,
-} from 'next-themes'
+import { useEffect } from 'react'
+import { useAppStore } from '@/lib/store'
 
-export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  return <NextThemesProvider {...props}>{children}</NextThemesProvider>
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const darkMode = useAppStore((state) => state.darkMode)
+
+  useEffect(() => {
+    // Apply theme class to html element
+    const root = document.documentElement
+    if (darkMode) {
+      root.classList.add('dark')
+    } else {
+      root.classList.remove('dark')
+    }
+  }, [darkMode])
+
+  return <>{children}</>
 }

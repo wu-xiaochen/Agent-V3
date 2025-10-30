@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { MessageSquare, Plus, Database, Users, Settings, ChevronLeft, ChevronRight, Trash2, RefreshCw, Edit2 } from "lucide-react"
+import { MessageSquare, Plus, Database, Users, ChevronLeft, ChevronRight, Trash2, RefreshCw, Edit2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useAppStore } from "@/lib/store"
@@ -417,15 +417,6 @@ export function Sidebar({ collapsed: externalCollapsed }: SidebarProps = {}) {
           {!collapsed && <span className="ml-2 text-sm">Tools</span>}
         </Button>
         
-        <Link href="/settings" className="w-full">
-          <Button 
-            variant="ghost" 
-            className="w-full justify-start text-sidebar-foreground"
-          >
-            <Settings className="h-4 w-4" />
-            {!collapsed && <span className="ml-2 text-sm">Settings</span>}
-          </Button>
-        </Link>
       </div>
     </div>
   )

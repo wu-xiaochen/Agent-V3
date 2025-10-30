@@ -381,62 +381,81 @@ export function ChatInterface() {
                 console.log("📦 observation内容:", crewObservation.content)
                 
                 try {
-                  let crewConfig = null
-                  
-                  // 尝试多种解析方式
-                  if (typeof crewObservation.content === 'string') {
-                    // 先清理可能的非法字符
-                    let cleanContent = crewObservation.content.trim()
+                  // 增强的JSON提取函数
+                  const extractCrewConfig = (content: string | object): any => {
+                    if (typeof content === 'object') {
+                      console.log("✅ observation是对象，直接提取")
+                      return content.crew_config || content.config || content
+                    }
                     
-                    console.log("🔍 准备解析JSON，原始内容前50字符:", cleanContent.substring(0, 50))
+                    let cleanContent = content.trim()
+                    console.log("🔍 准备解析JSON，原始内容前100字符:", cleanContent.substring(0, 100))
                     
-                    // 跳过明显不是JSON的内容
+                    // 1. 提取markdown代码块中的JSON
+                    const codeBlockMatch = cleanContent.match(/```(?:json)?\s*(\{[\s\S]*?\}|\[[\s\S]*?\])\s*```/)
+                    if (codeBlockMatch) {
+                      console.log("🔧 检测到markdown代码块，提取JSON...")
+                      cleanContent = codeBlockMatch[1].trim()
+                    }
+                    
+                    // 2. 跳过明显不是JSON的内容
                     if (!cleanContent.startsWith('{') && !cleanContent.startsWith('[')) {
-                      console.warn("⚠️ observation内容不是JSON格式，跳过:", cleanContent.substring(0, 100))
-                      return
+                      console.warn("⚠️ 内容不是JSON格式，跳过:", cleanContent.substring(0, 100))
+                      return null
                     }
                     
-                    // 跳过空对象或空数组
+                    // 3. 跳过空对象或空数组
                     if (cleanContent === '{}' || cleanContent === '[]') {
-                      console.warn("⚠️ observation是空对象/数组，跳过")
-                      return
+                      console.warn("⚠️ 空对象/数组，跳过")
+                      return null
                     }
                     
+                    // 4. 尝试解析JSON
                     try {
                       const parsed = JSON.parse(cleanContent)
                       console.log("✅ JSON解析成功:", parsed)
+                      const config = parsed.crew_config || parsed.config || parsed
                       
-                      // 尝试多个可能的字段
-                      crewConfig = parsed.crew_config || parsed.config || parsed
+                      // 5. Schema验证：必须包含agents或tasks
+                      if (!config.agents && !config.tasks) {
+                        console.warn("⚠️ 配置缺少必需字段(agents/tasks)")
+                        return null
+                      }
+                      
+                      return config
                     } catch (parseError: any) {
                       console.error("❌ JSON解析失败:", parseError.message)
-                      console.log("📄 失败的JSON内容（前200字符）:", cleanContent.substring(0, 200))
-                      console.log("📄 失败的JSON内容（后50字符）:", cleanContent.substring(Math.max(0, cleanContent.length - 50)))
+                      console.log("📄 失败内容（前200字符）:", cleanContent.substring(0, 200))
                       
-                      // 尝试提取JSON部分（如果被其他文本包裹）
-                      const jsonMatch = cleanContent.match(/\{[\s\S]*\}|\[[\s\S]*\]/)
+                      // 6. 尝试提取嵌入的JSON（最后的尝试）
+                      const jsonMatch = cleanContent.match(/\{[\s\S]*\}/)
                       if (jsonMatch) {
                         console.log("🔧 尝试提取嵌入的JSON...")
                         try {
                           const parsed = JSON.parse(jsonMatch[0])
-                          console.log("✅ 提取的JSON解析成功:", parsed)
-                          crewConfig = parsed.crew_config || parsed.config || parsed
+                          const config = parsed.crew_config || parsed.config || parsed
+                          
+                          if (!config.agents && !config.tasks) {
+                            console.warn("⚠️ 提取的配置缺少必需字段")
+                            return null
+                          }
+                          
+                          console.log("✅ 提取的JSON解析成功")
+                          return config
                         } catch (retryError) {
-                          console.error("❌ 提取后仍然解析失败，放弃")
-                          return
+                          console.error("❌ 提取后仍然解析失败")
+                          return null
                         }
-                      } else {
-                        console.error("❌ 无法提取有效JSON，放弃")
-                        return
                       }
+                      
+                      console.error("❌ 无法提取有效JSON")
+                      return null
                     }
-                  } else if (typeof crewObservation.content === 'object') {
-                    console.log("✅ observation是对象，直接提取")
-                    crewConfig = crewObservation.content.crew_config || crewObservation.content
                   }
                   
-                  // 验证crew_config是否有效
-                  if (crewConfig && (crewConfig.agents || crewConfig.tasks)) {
+                  const crewConfig = extractCrewConfig(crewObservation.content)
+                  
+                  if (crewConfig) {
                     console.log("✅ 成功提取crew配置:", {
                       id: crewConfig.id,
                       name: crewConfig.name,
@@ -446,11 +465,12 @@ export function ChatInterface() {
                     setPendingCrewConfig(crewConfig)
                     setCrewDrawerOpen(true)
                   } else {
-                    console.warn("⚠️ crew配置无效或不完整:", crewConfig)
+                    console.warn("⚠️ crew配置提取失败，继续显示思维链")
                   }
                 } catch (e) {
                   console.error("❌ 处理observation时发生错误:", e)
                   console.log("完整的observation:", crewObservation)
+                  // 不阻塞，继续显示思维链
                 }
               }
               
