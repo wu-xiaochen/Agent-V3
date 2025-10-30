@@ -137,7 +137,16 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
   }
 
   const handleSave = async () => {
-    if (!selectedCrew) return
+    console.log("💾 CrewDrawer - handleSave called", {
+      selectedCrew: !!selectedCrew,
+      nodesCount: canvasNodes.length,
+      edgesCount: canvasEdges.length
+    })
+    
+    if (!selectedCrew) {
+      console.warn("⚠️ No selected crew!")
+      return
+    }
 
     try {
       setLoading(true)
@@ -148,6 +157,8 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
         name: selectedCrew.name,
         description: selectedCrew.description,
       })
+      
+      console.log("📦 转换后的Crew配置:", crewConfig)
 
       // 验证配置
       const validation = validateCrewConfig(crewConfig)
@@ -184,10 +195,19 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
   }
 
   const handleRun = async () => {
-    if (!selectedCrew) return
+    console.log("▶️ CrewDrawer - handleRun called", {
+      selectedCrew: !!selectedCrew,
+      crewId: selectedCrew?.id
+    })
+    
+    if (!selectedCrew) {
+      console.warn("⚠️ No selected crew!")
+      return
+    }
 
     try {
       setLoading(true)
+      console.log("🚀 执行Crew:", selectedCrew.id)
       const result = await api.crewai.executeCrew(selectedCrew.id, {})
       if (result.success) {
         toast({

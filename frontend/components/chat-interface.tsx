@@ -42,55 +42,45 @@ function ThinkingStatus({
         </div>
       )}
       
-      {/* 🆕 思维链步骤 - 逐条显示：thinking → planning → action → observation */}
-      {toolCalls.map((call, index) => {
-        const isRunning = call.status === "running"
-        const isSuccess = call.status === "success" || call.status === "complete"
-        const isError = call.status === "error"
-        
-        // 🆕 根据步骤类型生成描述
-        const getStepDescription = () => {
-          if (call.type === 'thinking' || call.type === 'thought') {
-            return "💭 正在思考..."
-          }
-          if (call.type === 'planning') {
-            return "📝 制定计划..."
-          }
-          if (call.type === 'action') {
+      {/* 🆕 工具调用步骤 - V0简洁风格，逐条实时显示 */}
+      {toolCalls
+        .filter(call => call.type === 'action') // 只显示action类型（工具调用）
+        .map((call, index) => {
+          const isRunning = call.status === "running"
+          const isSuccess = call.status === "success" || call.status === "complete"
+          const isError = call.status === "error"
+          
+          // V0风格的工具描述
+          const getStepDescription = () => {
             const toolName = call.tool
-            if (toolName === "time") return "🕐 获取当前时间"
-            if (toolName === "search") return "🔍 搜索信息"
-            if (toolName === "calculator") return "🔢 计算结果"
-            if (toolName === "generate_document") return "📄 生成文档"
-            if (toolName === "crewai_generator") return "🤖 创建智能团队"
-            return `🔧 调用工具: ${toolName}`
+            if (toolName === "time") return "Checked current time"
+            if (toolName === "search") return "Searched information"
+            if (toolName === "calculator") return "Calculated result"
+            if (toolName === "generate_document") return "Generated document"
+            if (toolName === "crewai_generator") return "Built intelligent agent team"
+            return `Used ${toolName}`
           }
-          if (call.type === 'observation') {
-            return "✅ 工具执行完成"
-          }
-          return `步骤 ${call.step}`
-        }
-        
-        return (
-          <div 
-            key={`${call.type}-${call.step}-${index}`}
-            className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 px-2 py-1 rounded transition-colors"
-            onClick={() => setIsExpanded(!isExpanded)}
-          >
-            {isRunning && <Loader2 className="h-3.5 w-3.5 animate-spin text-orange-500" />}
-            {isSuccess && call.type === 'observation' && <span className="text-xs">✓</span>}
-            {isError && <span className="text-xs text-red-500">⚠️</span>}
-            <span className="text-muted-foreground flex-1">
-              {getStepDescription()}
-            </span>
-            {!isRunning && call.type === 'action' && (
-              <button className="text-muted-foreground hover:text-foreground">
-                <span className="text-xs">•••</span>
-              </button>
-            )}
-          </div>
-        )
-      })}
+          
+          return (
+            <div 
+              key={`tool-${call.step}-${index}`}
+              className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 px-2 py-1 rounded transition-colors"
+              onClick={() => setIsExpanded(!isExpanded)}
+            >
+              {isRunning && <Loader2 className="h-3.5 w-3.5 animate-spin text-orange-500" />}
+              {isSuccess && <span className="text-xs">🔧</span>}
+              {isError && <span className="text-xs text-red-500">⚠️</span>}
+              <span className="text-muted-foreground flex-1">
+                {getStepDescription()}
+              </span>
+              {!isRunning && (
+                <button className="text-muted-foreground hover:text-foreground">
+                  <span className="text-xs">•••</span>
+                </button>
+              )}
+            </div>
+          )
+        })}
       
       {/* 🆕 完成状态 - 显示总执行时间 */}
       {!isThinking && toolCalls.length > 0 && (
@@ -166,6 +156,23 @@ export function ChatInterface() {
   // 🆕 监听会话切换，清理状态并加载该会话的思维链历史
   useEffect(() => {
     console.log("🔄 Session changed to:", currentSession)
+    
+    // 🆕 确保当前session在localStorage中存在（初始化默认session）
+    if (currentSession) {
+      const sessionKey = `session_${currentSession}`
+      const existingSession = localStorage.getItem(sessionKey)
+      
+      if (!existingSession) {
+        // 如果不存在，创建默认的空session
+        const defaultSessionData = {
+          sessionId: currentSession,
+          messages: messages, // 使用当前的messages
+          timestamp: new Date().toISOString()
+        }
+        localStorage.setItem(sessionKey, JSON.stringify(defaultSessionData))
+        console.log(`💾 初始化默认session: ${currentSession}`)
+      }
+    }
     
     // 切换会话时清理所有进行中的状态
     setIsLoading(false)
@@ -305,82 +312,64 @@ export function ChatInterface() {
     try {
       const { api } = await import("@/lib/api")
       
-      // 🆕 开始轮询思维链历史（200ms快速轮询，实时显示）
+      // 🆕 开始轮询思维链历史（150ms超快速轮询，真正逐条实时显示）
       // ⚠️ 不清空历史，让后端自动覆盖，这样轮询能立即看到数据
+      let lastChainLength = 0 // 记录上次的链长度，实现增量更新
+      
       pollInterval = setInterval(async () => {
         try {
           pollCount++
-          console.log(`🔄 轮询思维链 #${pollCount}:`, requestSessionId)
           const chainData = await api.thinking.getThinkingChain(requestSessionId)
           
-          console.log("📦 思维链数据:", chainData)
-          
           if (chainData.success && chainData.thinking_chain.length > 0) {
-            // 🆕 检测是否调用了crewai_generator工具
-            const crewGeneratorStep = chainData.thinking_chain.find(
-              step => step.type === 'action' && step.tool === 'crewai_generator'
-            )
-            
-            if (crewGeneratorStep && !crewDrawerOpen) {
-              console.log("🎨 检测到crewai_generator调用，立即打开画布！")
-              setCrewDrawerOpen(true)
-            }
-            
-            // 🆕 转换思维链数据为工具调用格式（用于UI展示）
-            // ✅ 不再合并，保留所有步骤以实现逐条显示
-            const toolSteps = chainData.thinking_chain
-              .filter(step => 
-                step.type === 'thinking' || 
-                step.type === 'thought' || 
-                step.type === 'planning' ||
-                step.type === 'action' || 
-                step.type === 'tool_start' ||
-                step.type === 'observation'
+            // 🆕 只有当链长度变化时才更新（避免无意义的重新渲染）
+            if (chainData.thinking_chain.length !== lastChainLength) {
+              console.log(`🔄 轮询 #${pollCount}: 新增 ${chainData.thinking_chain.length - lastChainLength} 个步骤`)
+              lastChainLength = chainData.thinking_chain.length
+              
+              // 🆕 检测是否调用了crewai_generator工具
+              const crewGeneratorStep = chainData.thinking_chain.find(
+                step => step.type === 'action' && step.tool === 'crewai_generator'
               )
-              .map(step => {
-                if (step.type === 'thinking' || step.type === 'thought') {
-                  return {
-                    type: 'thinking',
-                    step: step.step,
-                    content: step.content,
-                    status: step.status || 'complete',
-                    timestamp: step.timestamp
+              
+              if (crewGeneratorStep && !crewDrawerOpen) {
+                console.log("🎨 检测到crewai_generator调用，立即打开画布！")
+                setCrewDrawerOpen(true)
+              }
+              
+              // 🆕 转换为工具调用格式（只显示action类型）
+              const toolSteps = chainData.thinking_chain
+                .filter(step => step.type === 'action' || step.type === 'observation')
+                .reduce((acc: any[], step) => {
+                  if (step.type === 'action') {
+                    // 查找是否已存在
+                    const existing = acc.find(t => t.tool === step.tool && t.step === step.step)
+                    if (!existing) {
+                      acc.push({
+                        type: 'action',
+                        tool: step.tool,
+                        step: step.step,
+                        status: step.status || 'running',
+                        input: step.tool_input,
+                        timestamp: step.timestamp
+                      })
+                    }
+                  } else if (step.type === 'observation') {
+                    // 更新对应的工具状态
+                    const tool = acc.find(t => t.step === step.step)
+                    if (tool) {
+                      tool.status = step.status || 'success'
+                      tool.output = step.content
+                      tool.error = step.error
+                      tool.execution_time = step.execution_time
+                    }
                   }
-                } else if (step.type === 'planning') {
-                  return {
-                    type: 'planning',
-                    step: step.step,
-                    content: step.content,
-                    status: step.status || 'complete',
-                    timestamp: step.timestamp
-                  }
-                } else if (step.type === 'action' || step.type === 'tool_start') {
-                  return {
-                    type: 'action',
-                    tool: step.tool,
-                    step: step.step,
-                    status: step.status || 'running',
-                    input: step.tool_input || step.input,
-                    content: step.content,
-                    timestamp: step.timestamp
-                  }
-                } else if (step.type === 'observation') {
-                  return {
-                    type: 'observation',
-                    step: step.step,
-                    status: step.status || 'success',
-                    output: step.content,
-                    error: step.error,
-                    execution_time: step.execution_time,
-                    timestamp: step.timestamp
-                  }
-                }
-                return null
-              })
-              .filter(Boolean) // 过滤掉null
-            
-            console.log("🔧 转换后的思维链步骤(逐条):", toolSteps.length)
-            setThinkingChain(toolSteps)
+                  return acc
+                }, [])
+              
+              console.log(`🔧 工具步骤: ${toolSteps.length} 个`)
+              setThinkingChain(toolSteps)
+            }
             
             // 检查是否已完成
             const hasChainEnd = chainData.thinking_chain.some(step => step.type === 'chain_end')
@@ -389,8 +378,6 @@ export function ChatInterface() {
               clearInterval(pollInterval)
               pollInterval = null
             }
-          } else {
-            console.log("⚠️  思维链数据为空或失败:", chainData)
           }
           
           // 达到最大轮询次数时停止
@@ -404,7 +391,7 @@ export function ChatInterface() {
         } catch (pollError) {
           console.error("轮询思维链失败:", pollError)
         }
-      }, 200)  // ← 200ms快速轮询，实时显示
+      }, 150)  // ← 150ms超快速轮询
       
       // ✅ 修复：调用API时携带附件信息
       console.log("🚀 Sending message:", {

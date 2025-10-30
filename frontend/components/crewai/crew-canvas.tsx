@@ -99,14 +99,26 @@ export function CrewCanvas({
   }, [setNodes])
 
   const handleSave = () => {
+    console.log("💾 CrewCanvas - handleSave clicked", {
+      nodesCount: nodes.length,
+      edgesCount: edges.length,
+      onSave: !!onSave
+    })
     if (onSave) {
       onSave(nodes, edges)
+    } else {
+      console.warn("⚠️ onSave callback is not provided!")
     }
   }
 
   const handleRun = () => {
+    console.log("▶️ CrewCanvas - handleRun clicked", {
+      onRun: !!onRun
+    })
     if (onRun) {
       onRun()
+    } else {
+      console.warn("⚠️ onRun callback is not provided!")
     }
   }
 
