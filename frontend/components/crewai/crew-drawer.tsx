@@ -212,6 +212,15 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
     setCanvasNodes(nodes)
     setCanvasEdges(edges)
   }
+  
+  // 🆕 处理Canvas保存按钮
+  const handleCanvasSave = async (nodes: Node[], edges: Edge[]) => {
+    // 更新本地状态
+    setCanvasNodes(nodes)
+    setCanvasEdges(edges)
+    // 执行真正的保存
+    await handleSave()
+  }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -315,7 +324,7 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
                           crewId={selectedCrew.id}
                           initialNodes={canvasNodes}
                           initialEdges={canvasEdges}
-                          onSave={handleCanvasChange}
+                          onSave={handleCanvasSave}
                           onRun={handleRun}
                         />
                       </div>

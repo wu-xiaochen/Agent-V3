@@ -654,11 +654,29 @@ Thought:{agent_scratchpad}"""
                 intermediate_steps = []
             
             # 🆕 3. 记录工具调用到上下文追踪器
+            # 同时检查工具返回值中是否有特殊action（如open_canvas）
+            special_action_data = None
             for step in intermediate_steps:
                 if len(step) >= 2:
                     action, observation = step[0], step[1]
                     if hasattr(action, 'tool'):
                         self.context_tracker.add_tool_call(action.tool, observation)
+                        
+                        # 🆕 检查observation中是否包含特殊action
+                        if isinstance(observation, dict):
+                            if observation.get("action") == "open_canvas":
+                                special_action_data = observation
+                                logger.info(f"🎨 检测到特殊action: open_canvas, crew_id={observation.get('crew_id')}")
+                        elif isinstance(observation, str):
+                            # 尝试解析JSON字符串
+                            try:
+                                import json
+                                parsed = json.loads(observation)
+                                if isinstance(parsed, dict) and parsed.get("action") == "open_canvas":
+                                    special_action_data = parsed
+                                    logger.info(f"🎨 检测到特殊action: open_canvas (from string), crew_id={parsed.get('crew_id')}")
+                            except:
+                                pass
             
             # 构建元数据
             metadata = {
@@ -672,6 +690,16 @@ Thought:{agent_scratchpad}"""
                 # 🆕 添加上下文追踪器统计信息
                 "context_stats": self.context_tracker.get_statistics()
             }
+            
+            # 🆕 如果有特殊action，合并到metadata中
+            if special_action_data:
+                metadata.update({
+                    "action": special_action_data.get("action"),
+                    "crew_id": special_action_data.get("crew_id"),
+                    "crew_name": special_action_data.get("crew_name"),
+                    "crew_config": special_action_data.get("crew_config")
+                })
+                logger.info(f"✅ 特殊action已添加到metadata")
             
             # 使用OutputFormatter格式化响应
             formatted_response = self.output_formatter.format_response(raw_output, metadata)
