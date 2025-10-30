@@ -215,7 +215,7 @@ export function CrewCanvas({
           {selectedNode.type === "agent" && selectedNode.data.agent && (
             <AgentConfigPanel
               agent={selectedNode.data.agent}
-              onUpdate={handleUpdateNode}
+              onSave={handleUpdateNode}
               onClose={() => {
                 setShowConfigPanel(false)
                 setSelectedNode(null)
@@ -225,8 +225,12 @@ export function CrewCanvas({
           {selectedNode.type === "task" && selectedNode.data.task && (
             <TaskConfigPanel
               task={selectedNode.data.task}
-              agents={getAllAgents()}
-              onUpdate={handleUpdateNode}
+              availableAgents={getAllAgents().map(agent => ({
+                id: agent.id,
+                name: agent.name,
+                role: agent.role
+              }))}
+              onSave={handleUpdateNode}
               onClose={() => {
                 setShowConfigPanel(false)
                 setSelectedNode(null)

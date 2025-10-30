@@ -6,182 +6,244 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import type { CrewAgent } from "@/lib/types/crewai"
+import { Badge } from "@/components/ui/badge"
+
+interface AgentConfig {
+  id: string
+  name: string
+  role: string
+  goal: string
+  backstory: string
+  verbose?: boolean
+  allow_delegation?: boolean
+  max_iter?: number
+  memory?: boolean
+  tools?: string[]
+}
 
 interface AgentConfigPanelProps {
-  agent: CrewAgent
-  onUpdate: (agent: CrewAgent) => void
+  agent: AgentConfig
+  onSave: (agent: AgentConfig) => void
   onClose: () => void
 }
 
-export function AgentConfigPanel({ agent, onUpdate, onClose }: AgentConfigPanelProps) {
-  const [localAgent, setLocalAgent] = useState<CrewAgent>(agent)
+export function AgentConfigPanel({ agent, onSave, onClose }: AgentConfigPanelProps) {
+  const [formData, setFormData] = useState<AgentConfig>(agent)
+  const [newTool, setNewTool] = useState("")
 
   useEffect(() => {
-    setLocalAgent(agent)
+    setFormData(agent)
   }, [agent])
 
-  const handleChange = (field: keyof CrewAgent, value: any) => {
-    const updated = { ...localAgent, [field]: value }
-    setLocalAgent(updated)
-    onUpdate(updated)  // 实时更新
+  const handleChange = (field: keyof AgentConfig, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleAddTool = () => {
+    if (newTool.trim() && !formData.tools?.includes(newTool.trim())) {
+      setFormData(prev => ({
+        ...prev,
+        tools: [...(prev.tools || []), newTool.trim()]
+      }))
+      setNewTool("")
+    }
+  }
+
+  const handleRemoveTool = (tool: string) => {
+    setFormData(prev => ({
+      ...prev,
+      tools: (prev.tools || []).filter(t => t !== tool)
+    }))
+  }
+
+  const handleSave = () => {
+    onSave(formData)
+    onClose()
   }
 
   return (
-    <Card className="absolute top-4 right-4 w-96 max-h-[80vh] bg-background/95 backdrop-blur shadow-lg border-2">
+    <div className="fixed inset-y-0 right-0 w-[400px] bg-background border-l shadow-lg z-50">
+      {/* Header */}
       <div className="flex items-center justify-between p-4 border-b">
-        <h3 className="font-semibold">Agent Configuration</h3>
-        <Button variant="ghost" size="sm" onClick={onClose}>
+        <h3 className="text-lg font-semibold">Agent Configuration</h3>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+        >
           <X className="h-4 w-4" />
         </Button>
       </div>
 
-      <ScrollArea className="h-[calc(80vh-60px)]">
+      {/* Content */}
+      <ScrollArea className="h-[calc(100vh-140px)]">
         <div className="p-4 space-y-4">
-          {/* 基本信息 */}
+          {/* Basic Info */}
           <div className="space-y-3">
             <div>
-              <Label>Name *</Label>
+              <Label htmlFor="name">Name</Label>
               <Input
-                value={localAgent.name}
+                id="name"
+                value={formData.name}
                 onChange={(e) => handleChange("name", e.target.value)}
-                placeholder="Agent name"
+                placeholder="Agent Name"
               />
             </div>
 
             <div>
-              <Label>Role *</Label>
+              <Label htmlFor="role">Role *</Label>
               <Input
-                value={localAgent.role}
+                id="role"
+                value={formData.role}
                 onChange={(e) => handleChange("role", e.target.value)}
-                placeholder="e.g., Data Analyst"
+                placeholder="e.g. Senior Data Analyst"
+                required
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                The role of the agent in the crew
-              </p>
             </div>
 
             <div>
-              <Label>Goal *</Label>
+              <Label htmlFor="goal">Goal *</Label>
               <Textarea
-                value={localAgent.goal}
+                id="goal"
+                value={formData.goal}
                 onChange={(e) => handleChange("goal", e.target.value)}
-                placeholder="What is the agent's goal?"
+                placeholder="What is this agent's objective?"
                 rows={3}
+                required
               />
             </div>
 
             <div>
-              <Label>Backstory</Label>
+              <Label htmlFor="backstory">Backstory *</Label>
               <Textarea
-                value={localAgent.backstory}
+                id="backstory"
+                value={formData.backstory}
                 onChange={(e) => handleChange("backstory", e.target.value)}
                 placeholder="Agent's background and expertise"
                 rows={4}
+                required
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                Provide context and personality
-              </p>
             </div>
           </div>
 
           <Separator />
 
-          {/* LLM配置 */}
+          {/* Tools */}
           <div className="space-y-3">
-            <h4 className="font-semibold text-sm">LLM Configuration</h4>
-
-            <div>
-              <Label>Model</Label>
-              <Select
-                value={localAgent.llm || "default"}
-                onValueChange={(value) => handleChange("llm", value === "default" ? undefined : value)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default">Use Crew Default</SelectItem>
-                  <SelectItem value="gpt-4">GPT-4</SelectItem>
-                  <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
-                  <SelectItem value="deepseek-chat">DeepSeek Chat</SelectItem>
-                  <SelectItem value="claude-3">Claude 3</SelectItem>
-                </SelectContent>
-              </Select>
+            <Label>Tools</Label>
+            <div className="flex gap-2">
+              <Input
+                value={newTool}
+                onChange={(e) => setNewTool(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && handleAddTool()}
+                placeholder="Add tool name..."
+              />
+              <Button onClick={handleAddTool} size="sm">
+                Add
+              </Button>
             </div>
+            {formData.tools && formData.tools.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {formData.tools.map(tool => (
+                  <Badge
+                    key={tool}
+                    variant="secondary"
+                    className="cursor-pointer"
+                    onClick={() => handleRemoveTool(tool)}
+                  >
+                    {tool}
+                    <X className="ml-1 h-3 w-3" />
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
 
           <Separator />
 
-          {/* 工具配置 */}
-          <div className="space-y-3">
-            <h4 className="font-semibold text-sm">Tools</h4>
-            <div className="text-sm text-muted-foreground">
-              Tools: {localAgent.tools.join(", ") || "None"}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Configure tools in the Crew settings
-            </p>
-          </div>
-
-          <Separator />
-
-          {/* 高级设置 */}
-          <div className="space-y-3">
+          {/* Advanced Settings */}
+          <div className="space-y-4">
             <h4 className="font-semibold text-sm">Advanced Settings</h4>
 
             <div className="flex items-center justify-between">
-              <div>
-                <Label>Verbose</Label>
-                <p className="text-xs text-muted-foreground">Enable detailed logging</p>
+              <div className="space-y-0.5">
+                <Label>Verbose Mode</Label>
+                <p className="text-xs text-muted-foreground">
+                  Show detailed execution logs
+                </p>
               </div>
               <Switch
-                checked={localAgent.verbose || false}
+                checked={formData.verbose ?? false}
                 onCheckedChange={(checked) => handleChange("verbose", checked)}
               />
             </div>
 
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Allow Delegation</Label>
+                <p className="text-xs text-muted-foreground">
+                  Can delegate tasks to other agents
+                </p>
+              </div>
+              <Switch
+                checked={formData.allow_delegation ?? false}
+                onCheckedChange={(checked) => handleChange("allow_delegation", checked)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Memory</Label>
+                <p className="text-xs text-muted-foreground">
+                  Remember conversation history
+                </p>
+              </div>
+              <Switch
+                checked={formData.memory ?? true}
+                onCheckedChange={(checked) => handleChange("memory", checked)}
+              />
+            </div>
+
             <div>
-              <Label>Max Iterations</Label>
+              <Label htmlFor="max_iter">Max Iterations</Label>
               <Input
+                id="max_iter"
                 type="number"
-                value={localAgent.maxIter || 20}
-                onChange={(e) => handleChange("maxIter", parseInt(e.target.value))}
+                value={formData.max_iter ?? 15}
+                onChange={(e) => handleChange("max_iter", parseInt(e.target.value))}
                 min={1}
                 max={100}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Maximum number of iterations
+                Maximum number of iterations before stopping (1-100)
               </p>
             </div>
-
-            <div>
-              <Label>Max RPM</Label>
-              <Input
-                type="number"
-                value={localAgent.maxRpm || 10}
-                onChange={(e) => handleChange("maxRpm", parseInt(e.target.value))}
-                min={1}
-                max={100}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Requests per minute limit
-              </p>
-            </div>
-          </div>
-
-          {/* ID显示 */}
-          <div className="pt-4 border-t text-xs text-muted-foreground">
-            <div>ID: {localAgent.id}</div>
           </div>
         </div>
       </ScrollArea>
-    </Card>
+
+      {/* Footer */}
+      <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-background">
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            className="flex-1"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            className="flex-1"
+            disabled={!formData.role || !formData.goal || !formData.backstory}
+          >
+            Save
+          </Button>
+        </div>
+      </div>
+    </div>
   )
 }
-
