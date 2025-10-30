@@ -261,6 +261,36 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
     }
   }
 
+  // 🆕 处理AI生成的crew配置（自动打开并显示）
+  useEffect(() => {
+    if (open && initialCrewConfig) {
+      console.log("🎨 检测到AI生成的Crew配置，自动加载到画布:", initialCrewConfig)
+      
+      // 创建新的crew（使用AI生成的配置）
+      const newCrew: CrewConfig = {
+        ...initialCrewConfig,
+        id: initialCrewConfig.id || generateCrewId(),
+        createdAt: initialCrewConfig.createdAt || new Date().toISOString(),
+        updatedAt: initialCrewConfig.updatedAt || new Date().toISOString(),
+      }
+      
+      setSelectedCrew(newCrew)
+      
+      // 转换为Canvas格式并显示
+      const { nodes, edges } = convertCrewConfigToCanvas(newCrew)
+      setCanvasNodes(nodes)
+      setCanvasEdges(edges)
+      setIsCreating(true)
+      
+      console.log("✅ AI生成的Crew已加载到画布:", {
+        agents: newCrew.agents.length,
+        tasks: newCrew.tasks.length,
+        nodes: nodes.length,
+        edges: edges.length
+      })
+    }
+  }, [open, initialCrewConfig])
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetTrigger asChild>

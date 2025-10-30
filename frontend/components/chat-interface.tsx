@@ -42,36 +42,48 @@ function ThinkingStatus({
         </div>
       )}
       
-      {/* 🆕 工具调用步骤 - 类似V0的简洁风格 */}
+      {/* 🆕 思维链步骤 - 逐条显示：thinking → planning → action → observation */}
       {toolCalls.map((call, index) => {
         const isRunning = call.status === "running"
-        const isSuccess = call.status === "success"
+        const isSuccess = call.status === "success" || call.status === "complete"
         const isError = call.status === "error"
         
-        // 生成步骤描述
+        // 🆕 根据步骤类型生成描述
         const getStepDescription = () => {
-          const toolName = call.tool
-          if (toolName === "time") return "Checked current time"
-          if (toolName === "search") return "Searched information"
-          if (toolName === "calculator") return "Calculated result"
-          if (toolName === "generate_document") return "Generated document"
-          if (toolName.includes("crewai")) return "Built intelligent agent team"
-          return `Used ${toolName}`
+          if (call.type === 'thinking' || call.type === 'thought') {
+            return "💭 正在思考..."
+          }
+          if (call.type === 'planning') {
+            return "📝 制定计划..."
+          }
+          if (call.type === 'action') {
+            const toolName = call.tool
+            if (toolName === "time") return "🕐 获取当前时间"
+            if (toolName === "search") return "🔍 搜索信息"
+            if (toolName === "calculator") return "🔢 计算结果"
+            if (toolName === "generate_document") return "📄 生成文档"
+            if (toolName === "crewai_generator") return "🤖 创建智能团队"
+            return `🔧 调用工具: ${toolName}`
+          }
+          if (call.type === 'observation') {
+            return "✅ 工具执行完成"
+          }
+          return `步骤 ${call.step}`
         }
         
         return (
           <div 
-            key={index} 
+            key={`${call.type}-${call.step}-${index}`}
             className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 px-2 py-1 rounded transition-colors"
             onClick={() => setIsExpanded(!isExpanded)}
           >
             {isRunning && <Loader2 className="h-3.5 w-3.5 animate-spin text-orange-500" />}
-            {isSuccess && <span className="text-xs">🔧</span>}
+            {isSuccess && call.type === 'observation' && <span className="text-xs">✓</span>}
             {isError && <span className="text-xs text-red-500">⚠️</span>}
             <span className="text-muted-foreground flex-1">
               {getStepDescription()}
             </span>
-            {!isRunning && (
+            {!isRunning && call.type === 'action' && (
               <button className="text-muted-foreground hover:text-foreground">
                 <span className="text-xs">•••</span>
               </button>
@@ -254,19 +266,24 @@ export function ChatInterface() {
       files: attachments.length > 0 ? attachments : undefined
     }
 
-    addMessage(userMessage)
     const messageContent = input
     const requestSessionId = currentSession || "default"
     const currentMessageId = userMessage.id  // 🆕 保存当前消息ID
     
-    // 🆕 立即保存会话（用户输入后马上保存）
+    // 🆕 在addMessage之前先保存（确保立即持久化）
+    const updatedMessages = [...messages, userMessage]
+    
+    // 立即保存会话到localStorage
     const sessionData = {
       sessionId: requestSessionId,
-      messages: [...messages, userMessage],
+      messages: updatedMessages,
       timestamp: new Date().toISOString()
     }
     localStorage.setItem(`session_${requestSessionId}`, JSON.stringify(sessionData))
-    console.log(`💾 用户输入后立即保存会话: ${requestSessionId}`)
+    console.log(`💾 用户输入后立即保存会话: ${requestSessionId}`, updatedMessages.length)
+    
+    // 然后更新UI状态
+    addMessage(userMessage)
     
     setInput("")
     setIsLoading(true)
@@ -310,35 +327,59 @@ export function ChatInterface() {
             }
             
             // 🆕 转换思维链数据为工具调用格式（用于UI展示）
+            // ✅ 不再合并，保留所有步骤以实现逐条显示
             const toolSteps = chainData.thinking_chain
-              .filter(step => step.type === 'action' || step.type === 'observation')
-              .reduce((acc: any[], step) => {
-                if (step.type === 'action') {
-                  // 找到或创建工具调用记录
-                  const existingTool = acc.find(t => t.tool === step.tool && t.step === step.step)
-                  if (!existingTool) {
-                    acc.push({
-                      tool: step.tool,
-                      step: step.step,
-                      status: step.status || 'running',
-                      input: step.tool_input,
-                      timestamp: step.timestamp
-                    })
+              .filter(step => 
+                step.type === 'thinking' || 
+                step.type === 'thought' || 
+                step.type === 'planning' ||
+                step.type === 'action' || 
+                step.type === 'tool_start' ||
+                step.type === 'observation'
+              )
+              .map(step => {
+                if (step.type === 'thinking' || step.type === 'thought') {
+                  return {
+                    type: 'thinking',
+                    step: step.step,
+                    content: step.content,
+                    status: step.status || 'complete',
+                    timestamp: step.timestamp
+                  }
+                } else if (step.type === 'planning') {
+                  return {
+                    type: 'planning',
+                    step: step.step,
+                    content: step.content,
+                    status: step.status || 'complete',
+                    timestamp: step.timestamp
+                  }
+                } else if (step.type === 'action' || step.type === 'tool_start') {
+                  return {
+                    type: 'action',
+                    tool: step.tool,
+                    step: step.step,
+                    status: step.status || 'running',
+                    input: step.tool_input || step.input,
+                    content: step.content,
+                    timestamp: step.timestamp
                   }
                 } else if (step.type === 'observation') {
-                  // 更新对应的工具调用记录
-                  const tool = acc.find(t => t.step === step.step)
-                  if (tool) {
-                    tool.status = step.status || 'success'
-                    tool.output = step.content
-                    tool.error = step.error
-                    tool.execution_time = step.execution_time
+                  return {
+                    type: 'observation',
+                    step: step.step,
+                    status: step.status || 'success',
+                    output: step.content,
+                    error: step.error,
+                    execution_time: step.execution_time,
+                    timestamp: step.timestamp
                   }
                 }
-                return acc
-              }, [])
+                return null
+              })
+              .filter(Boolean) // 过滤掉null
             
-            console.log("🔧 转换后的工具步骤:", toolSteps)
+            console.log("🔧 转换后的思维链步骤(逐条):", toolSteps.length)
             setThinkingChain(toolSteps)
             
             // 检查是否已完成
