@@ -378,27 +378,39 @@ export function ChatInterface() {
               
               if (crewObservation && !crewDrawerOpen) {
                 console.log("🎨 检测到crew生成完成，解析配置并打开画布")
-                console.log("📦 observation内容:", crewObservation.content)
+                
+                // 🔥 优先使用metadata中的observation对象（已修复Python dict -> JSON问题）
+                const observationData = (crewObservation as any).metadata?.observation || crewObservation.content
+                console.log("📦 observation内容:", observationData)
+                console.log("📦 observation类型:", typeof observationData)
                 
                 try {
-                  // 增强的JSON提取函数
+                  // 🆕 增强的JSON提取函数 (根据 OPTIMIZATION_RECOMMENDATIONS.md 优化)
                   const extractCrewConfig = (content: string | object): any => {
+                    // 1. 对象类型直接提取
                     if (typeof content === 'object') {
                       console.log("✅ observation是对象，直接提取")
-                      return content.crew_config || content.config || content
+                      const config = content.crew_config || content.config || content
+                      return validateAndCleanConfig(config)
                     }
                     
                     let cleanContent = content.trim()
                     console.log("🔍 准备解析JSON，原始内容前100字符:", cleanContent.substring(0, 100))
                     
-                    // 1. 提取markdown代码块中的JSON
+                    // 2. 提取markdown代码块中的JSON
                     const codeBlockMatch = cleanContent.match(/```(?:json)?\s*(\{[\s\S]*?\}|\[[\s\S]*?\])\s*```/)
                     if (codeBlockMatch) {
                       console.log("🔧 检测到markdown代码块，提取JSON...")
                       cleanContent = codeBlockMatch[1].trim()
                     }
                     
-                    // 2. 跳过明显不是JSON的内容
+                    // 3. 提取嵌入的JSON对象
+                    const jsonMatch = cleanContent.match(/\{[\s\S]*"(crew_config|agents|tasks)"[\s\S]*\}/)
+                    if (jsonMatch) {
+                      cleanContent = jsonMatch[0]
+                    }
+                    
+                    // 4. 跳过明显不是JSON的内容
                     if (!cleanContent.startsWith('{') && !cleanContent.startsWith('[')) {
                       console.warn("⚠️ 内容不是JSON格式，跳过:", cleanContent.substring(0, 100))
                       return null
@@ -453,7 +465,70 @@ export function ChatInterface() {
                     }
                   }
                   
-                  const crewConfig = extractCrewConfig(crewObservation.content)
+                  // 🆕 验证和清洗配置函数
+                  const validateAndCleanConfig = (config: any): any => {
+                    if (!config) return null
+                    
+                    // 验证必需字段
+                    if (!config.agents || !Array.isArray(config.agents) || config.agents.length === 0) {
+                      console.warn("⚠️ 配置缺少agents字段")
+                      return null
+                    }
+                    
+                    if (!config.tasks || !Array.isArray(config.tasks) || config.tasks.length === 0) {
+                      console.warn("⚠️ 配置缺少tasks字段")
+                      return null
+                    }
+                    
+                    // 数据清洗 - 确保所有agent都有必需字段
+                    config.agents = config.agents.map((agent: any, index: number) => ({
+                      id: agent.id || `agent_${index}`,
+                      name: agent.name || `Agent ${index + 1}`,
+                      role: agent.role || "Agent",
+                      goal: agent.goal || "Complete assigned tasks",
+                      backstory: agent.backstory || "I am a helpful AI assistant",
+                      tools: Array.isArray(agent.tools) ? agent.tools : [],
+                      verbose: agent.verbose !== undefined ? agent.verbose : true,
+                      allowDelegation: agent.allowDelegation !== undefined ? agent.allowDelegation : false,
+                      maxIter: agent.maxIter || 25,
+                      maxRpm: agent.maxRpm || 1000,
+                      llm: agent.llm || null
+                    }))
+                    
+                    // 数据清洗 - 确保所有task都有必需字段
+                    config.tasks = config.tasks.map((task: any, index: number) => ({
+                      id: task.id || `task_${index}`,
+                      description: task.description || "Task description",
+                      expectedOutput: task.expectedOutput || task.expected_output || "Task output",
+                      agent: task.agent || config.agents[0]?.id || config.agents[0]?.name,
+                      dependencies: Array.isArray(task.dependencies) ? task.dependencies : [],
+                      context: task.context || null,
+                      async: task.async !== undefined ? task.async : false,
+                      tools: Array.isArray(task.tools) ? task.tools : []
+                    }))
+                    
+                    // 确保其他必需字段
+                    config.id = config.id || `crew_${Date.now()}`
+                    config.name = config.name || config.crew_name || "Generated Crew"
+                    config.description = config.description || "AI generated crew configuration"
+                    config.process = config.process || "sequential"
+                    config.verbose = config.verbose !== undefined ? config.verbose : true
+                    config.memory = config.memory !== undefined ? config.memory : true
+                    
+                    console.log("✅ 配置验证和清洗完成:", {
+                      agentsCount: config.agents.length,
+                      tasksCount: config.tasks.length
+                    })
+                    
+                    return config
+                  }
+                  
+                  let crewConfig = extractCrewConfig(observationData)
+                  
+                  // 🆕 对提取的配置进行验证和清洗
+                  if (crewConfig) {
+                    crewConfig = validateAndCleanConfig(crewConfig)
+                  }
                   
                   if (crewConfig) {
                     console.log("✅ 成功提取crew配置:", {

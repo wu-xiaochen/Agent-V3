@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Uplo
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 import uvicorn
@@ -599,6 +599,9 @@ async def update_system_config(update: Dict[str, Any]):
             "config": response.model_dump(mode='json'),
             "message": "配置已更新"
         }
+    except ValidationError as e:
+        logger.error(f"❌ 配置验证失败: {e}")
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.error(f"❌ 更新系统配置失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))

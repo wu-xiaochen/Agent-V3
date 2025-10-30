@@ -3,6 +3,7 @@
 import type { Message } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { User, Bot } from "lucide-react"
+import { MarkdownContent } from "./markdown-content"
 
 interface MessageBubbleProps {
   message: Message
@@ -24,7 +25,12 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           isUser ? "bg-primary text-primary-foreground" : "bg-card text-card-foreground border border-border",
         )}
       >
-        <p className="whitespace-pre-wrap text-sm leading-relaxed m-0">{message.content}</p>
+        {/* 用户消息: 简单文本 | AI消息: Markdown渲染 */}
+        {isUser ? (
+          <p className="whitespace-pre-wrap text-sm leading-relaxed m-0">{message.content}</p>
+        ) : (
+          <MarkdownContent content={message.content} className="text-sm" />
+        )}
         {message.files && message.files.length > 0 && (
           <div className="mt-2 space-y-2">
             {message.files.map((file) => (

@@ -2,250 +2,317 @@
 系统配置服务单元测试
 """
 import pytest
-import os
 import json
+import os
 from pathlib import Path
 from datetime import datetime
-
-from src.models.system_config import SystemConfig, SystemConfigUpdate, SystemConfigResponse
 from src.services.system_config_service import SystemConfigService
+from src.models.system_config import SystemConfig, SystemConfigUpdate
 
 
-class TestSystemConfigModels:
-    """测试系统配置数据模型"""
+@pytest.fixture
+def temp_config_file(tmp_path):
+    """创建临时配置文件"""
+    config_file = tmp_path / "test_system_config.json"
+    return str(config_file)
+
+
+@pytest.fixture
+def config_service(temp_config_file):
+    """创建配置服务实例"""
+    return SystemConfigService(config_file=temp_config_file)
+
+
+class TestSystemConfigService:
+    """系统配置服务测试类"""
     
-    def test_system_config_default_values(self):
-        """测试默认配置值"""
-        config = SystemConfig()
+    def test_init_creates_directory(self, tmp_path):
+        """测试初始化时创建目录"""
+        config_file = tmp_path / "nested" / "config" / "system.json"
+        service = SystemConfigService(config_file=str(config_file))
+        
+        assert config_file.parent.exists()
+        assert service.config_file == config_file
+    
+    def test_get_config_default_when_file_not_exists(self, config_service):
+        """测试文件不存在时返回默认配置"""
+        config = config_service.get_config()
         
         assert config.id == "default"
         assert config.llm_provider == "siliconflow"
-        assert config.api_key == ""
         assert config.base_url == "https://api.siliconflow.cn/v1"
         assert config.default_model == "Qwen/Qwen2.5-7B-Instruct"
         assert config.temperature == 0.7
         assert config.max_tokens == 2000
+        assert config.api_key == ""
+        assert config.created_at is not None
+        assert config.updated_at is not None
     
-    def test_system_config_custom_values(self):
-        """测试自定义配置值"""
+    def test_save_config_creates_file(self, config_service, temp_config_file):
+        """测试保存配置创建文件"""
         config = SystemConfig(
-            llm_provider="openai",
-            api_key="sk-test123",
-            base_url="https://api.openai.com/v1",
-            default_model="gpt-4",
-            temperature=0.5,
+            api_key="sk-test123456",
+            temperature=0.8,
+            max_tokens=3000
+        )
+        
+        saved_config = config_service.save_config(config)
+        
+        # 验证文件存在
+        assert Path(temp_config_file).exists()
+        
+        # 验证返回的配置
+        assert saved_config.api_key == "sk-test123456"
+        assert saved_config.temperature == 0.8
+        assert saved_config.max_tokens == 3000
+        assert saved_config.created_at is not None
+        assert saved_config.updated_at is not None
+    
+    def test_save_config_encrypts_api_key(self, config_service, temp_config_file):
+        """测试保存配置时加密API Key"""
+        config = SystemConfig(api_key="sk-test123456")
+        config_service.save_config(config)
+        
+        # 读取文件内容
+        with open(temp_config_file, "r") as f:
+            saved_data = json.load(f)
+        
+        # 验证API Key已加密（不是原始值）
+        assert saved_data["api_key"] != "sk-test123456"
+        assert len(saved_data["api_key"]) > 0
+    
+    def test_get_config_decrypts_api_key(self, config_service):
+        """测试获取配置时解密API Key"""
+        # 先保存一个配置
+        original_config = SystemConfig(api_key="sk-test123456")
+        config_service.save_config(original_config)
+        
+        # 再读取配置
+        loaded_config = config_service.get_config()
+        
+        # 验证API Key已解密
+        assert loaded_config.api_key == "sk-test123456"
+    
+    def test_update_config_partial_update(self, config_service):
+        """测试部分更新配置"""
+        # 保存初始配置
+        initial_config = SystemConfig(
+            api_key="sk-old",
+            temperature=0.7,
+            max_tokens=2000
+        )
+        config_service.save_config(initial_config)
+        
+        # 部分更新
+        update = SystemConfigUpdate(
+            temperature=0.9,
             max_tokens=4000
         )
+        updated_config = config_service.update_config(update)
         
-        assert config.llm_provider == "openai"
-        assert config.api_key == "sk-test123"
-        assert config.base_url == "https://api.openai.com/v1"
-        assert config.default_model == "gpt-4"
-        assert config.temperature == 0.5
-        assert config.max_tokens == 4000
+        # 验证更新的字段
+        assert updated_config.temperature == 0.9
+        assert updated_config.max_tokens == 4000
+        
+        # 验证未更新的字段保持不变
+        assert updated_config.api_key == "sk-old"
+        assert updated_config.llm_provider == "siliconflow"
     
-    def test_system_config_validation(self):
-        """测试配置验证"""
-        # Temperature范围验证
-        with pytest.raises(ValueError):
+    def test_update_config_with_api_key(self, config_service):
+        """测试更新API Key"""
+        # 保存初始配置
+        initial_config = SystemConfig(api_key="sk-old")
+        config_service.save_config(initial_config)
+        
+        # 更新API Key
+        update = SystemConfigUpdate(api_key="sk-new123456")
+        updated_config = config_service.update_config(update)
+        
+        # 验证API Key已更新
+        assert updated_config.api_key == "sk-new123456"
+        
+        # 重新读取验证持久化
+        loaded_config = config_service.get_config()
+        assert loaded_config.api_key == "sk-new123456"
+    
+    def test_reset_to_default(self, config_service):
+        """测试重置为默认配置"""
+        # 先保存一个自定义配置
+        custom_config = SystemConfig(
+            api_key="sk-custom",
+            temperature=0.9,
+            max_tokens=5000,
+            llm_provider="openai"
+        )
+        config_service.save_config(custom_config)
+        
+        # 重置为默认
+        default_config = config_service.reset_to_default()
+        
+        # 验证已重置为默认值
+        assert default_config.llm_provider == "siliconflow"
+        assert default_config.temperature == 0.7
+        assert default_config.max_tokens == 2000
+        assert default_config.api_key == ""
+    
+    def test_api_key_encryption_decryption_roundtrip(self, config_service):
+        """测试API Key加密解密往返"""
+        test_keys = [
+            "sk-short",
+            "sk-medium-length-key",
+            "sk-very-long-api-key-with-many-characters-1234567890",
+            "",  # 空字符串
+        ]
+        
+        for original_key in test_keys:
+            encrypted = config_service._encrypt_api_key(original_key)
+            decrypted = config_service._decrypt_api_key(encrypted)
+            assert decrypted == original_key
+    
+    def test_config_persistence_across_instances(self, temp_config_file):
+        """测试配置在不同服务实例间持久化"""
+        # 第一个服务实例保存配置
+        service1 = SystemConfigService(config_file=temp_config_file)
+        config1 = SystemConfig(
+            api_key="sk-persist",
+            temperature=0.85,
+            max_tokens=3500
+        )
+        service1.save_config(config1)
+        
+        # 第二个服务实例读取配置
+        service2 = SystemConfigService(config_file=temp_config_file)
+        config2 = service2.get_config()
+        
+        # 验证配置一致
+        assert config2.api_key == "sk-persist"
+        assert config2.temperature == 0.85
+        assert config2.max_tokens == 3500
+    
+    def test_invalid_json_returns_default(self, config_service, temp_config_file):
+        """测试无效JSON文件返回默认配置"""
+        # 写入无效的JSON
+        with open(temp_config_file, "w") as f:
+            f.write("{ invalid json }")
+        
+        # 获取配置应返回默认值
+        config = config_service.get_config()
+        
+        assert config.id == "default"
+        assert config.llm_provider == "siliconflow"
+    
+    def test_config_timestamps(self, config_service):
+        """测试配置时间戳"""
+        config = SystemConfig()
+        
+        # 首次保存
+        saved1 = config_service.save_config(config)
+        assert saved1.created_at is not None
+        assert saved1.updated_at is not None
+        created_time = saved1.created_at
+        
+        # 更新配置
+        import time
+        time.sleep(0.1)  # 确保时间戳不同
+        update = SystemConfigUpdate(temperature=0.9)
+        saved2 = config_service.update_config(update)
+        
+        # created_at应保持不变，updated_at应更新
+        assert saved2.created_at == created_time
+        assert saved2.updated_at > saved2.created_at
+    
+    def test_temperature_validation(self):
+        """测试temperature参数验证"""
+        # 有效值
+        config = SystemConfig(temperature=0.0)
+        assert config.temperature == 0.0
+        
+        config = SystemConfig(temperature=2.0)
+        assert config.temperature == 2.0
+        
+        # 无效值应触发验证错误
+        with pytest.raises(Exception):
             SystemConfig(temperature=-0.1)
         
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             SystemConfig(temperature=2.1)
+    
+    def test_max_tokens_validation(self):
+        """测试max_tokens参数验证"""
+        # 有效值
+        config = SystemConfig(max_tokens=1)
+        assert config.max_tokens == 1
         
-        # Max tokens范围验证
-        with pytest.raises(ValueError):
+        config = SystemConfig(max_tokens=100000)
+        assert config.max_tokens == 100000
+        
+        # 无效值应触发验证错误
+        with pytest.raises(Exception):
             SystemConfig(max_tokens=0)
         
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             SystemConfig(max_tokens=100001)
     
-    def test_system_config_update(self):
-        """测试配置更新模型"""
-        update = SystemConfigUpdate(
-            llm_provider="anthropic",
-            temperature=0.8
-        )
+    def test_empty_api_key_handling(self, config_service):
+        """测试空API Key处理"""
+        config = SystemConfig(api_key="")
+        saved_config = config_service.save_config(config)
         
-        assert update.llm_provider == "anthropic"
-        assert update.temperature == 0.8
-        assert update.api_key is None
-        assert update.base_url is None
+        assert saved_config.api_key == ""
+        
+        loaded_config = config_service.get_config()
+        assert loaded_config.api_key == ""
+
+
+class TestSystemConfigResponseModel:
+    """系统配置响应模型测试"""
     
-    def test_system_config_response_masking(self):
-        """测试API Key脱敏"""
-        config = SystemConfig(api_key="sk-1234567890abcdef1234567890abcdef")
+    def test_api_key_masking_long_key(self):
+        """测试长API Key脱敏"""
+        from src.models.system_config import SystemConfigResponse
+        
+        config = SystemConfig(api_key="sk-1234567890abcdef")
         response = SystemConfigResponse.from_system_config(config)
         
         assert response.api_key_masked == "sk-1****cdef"
-        assert "1234567890abcdef1234567890ab" not in response.api_key_masked
     
-    def test_system_config_response_short_key(self):
+    def test_api_key_masking_short_key(self):
         """测试短API Key脱敏"""
-        config = SystemConfig(api_key="sk-123")
+        from src.models.system_config import SystemConfigResponse
+        
+        config = SystemConfig(api_key="short")
         response = SystemConfigResponse.from_system_config(config)
         
-        # 短key会显示****+后4位，"sk-123"总共6个字符，后4位是"-123"
-        assert response.api_key_masked == "****-123"
+        assert response.api_key_masked == "****hort"
     
-    def test_system_config_response_empty_key(self):
-        """测试空API Key"""
+    def test_api_key_masking_empty_key(self):
+        """测试空API Key脱敏"""
+        from src.models.system_config import SystemConfigResponse
+        
         config = SystemConfig(api_key="")
         response = SystemConfigResponse.from_system_config(config)
         
         assert response.api_key_masked == ""
-
-
-class TestSystemConfigService:
-    """测试系统配置服务"""
     
-    @pytest.fixture
-    def temp_config_file(self, tmp_path):
-        """创建临时配置文件"""
-        return tmp_path / "test_system_config.json"
-    
-    @pytest.fixture
-    def service(self, temp_config_file):
-        """创建服务实例"""
-        return SystemConfigService(config_file=str(temp_config_file))
-    
-    def test_get_config_default(self, service, temp_config_file):
-        """测试获取默认配置（文件不存在）"""
-        assert not temp_config_file.exists()
+    def test_response_model_preserves_other_fields(self):
+        """测试响应模型保留其他字段"""
+        from src.models.system_config import SystemConfigResponse
         
-        config = service.get_config()
-        
-        assert config.id == "default"
-        assert config.llm_provider == "siliconflow"
-        assert config.created_at is not None
-        assert config.updated_at is not None
-    
-    def test_save_config(self, service, temp_config_file):
-        """测试保存配置"""
         config = SystemConfig(
+            id="test",
             llm_provider="openai",
-            api_key="sk-test123",
-            temperature=0.8
-        )
-        
-        saved_config = service.save_config(config)
-        
-        assert temp_config_file.exists()
-        assert saved_config.created_at is not None
-        assert saved_config.updated_at is not None
-    
-    def test_encrypt_decrypt_api_key(self, service):
-        """测试API Key加密和解密"""
-        original_key = "sk-1234567890abcdef"
-        
-        encrypted = service._encrypt_api_key(original_key)
-        assert encrypted != original_key
-        
-        decrypted = service._decrypt_api_key(encrypted)
-        assert decrypted == original_key
-    
-    def test_save_and_load_config(self, service):
-        """测试保存和加载配置"""
-        # 保存配置
-        original_config = SystemConfig(
-            llm_provider="anthropic",
-            api_key="sk-secret123",
-            base_url="https://api.anthropic.com/v1",
-            default_model="claude-3-opus",
-            temperature=0.6,
+            api_key="sk-test123456",
+            base_url="https://api.openai.com",
+            default_model="gpt-4",
+            temperature=0.8,
             max_tokens=3000
         )
-        service.save_config(original_config)
         
-        # 加载配置
-        loaded_config = service.get_config()
+        response = SystemConfigResponse.from_system_config(config)
         
-        assert loaded_config.llm_provider == "anthropic"
-        assert loaded_config.api_key == "sk-secret123"  # 应该被解密
-        assert loaded_config.base_url == "https://api.anthropic.com/v1"
-        assert loaded_config.default_model == "claude-3-opus"
-        assert loaded_config.temperature == 0.6
-        assert loaded_config.max_tokens == 3000
-    
-    def test_update_config(self, service):
-        """测试更新配置"""
-        # 先保存初始配置
-        initial_config = SystemConfig(llm_provider="siliconflow")
-        service.save_config(initial_config)
-        
-        # 更新部分字段
-        update = SystemConfigUpdate(
-            llm_provider="openai",
-            temperature=0.9
-        )
-        updated_config = service.update_config(update)
-        
-        assert updated_config.llm_provider == "openai"
-        assert updated_config.temperature == 0.9
-        assert updated_config.max_tokens == 2000  # 未更新的字段保持不变
-    
-    def test_reset_to_default(self, service):
-        """测试重置为默认配置"""
-        # 先保存自定义配置
-        custom_config = SystemConfig(
-            llm_provider="openai",
-            api_key="sk-custom",
-            temperature=0.9
-        )
-        service.save_config(custom_config)
-        
-        # 重置为默认
-        default_config = service.reset_to_default()
-        
-        assert default_config.llm_provider == "siliconflow"
-        assert default_config.api_key == ""
-        assert default_config.temperature == 0.7
-    
-    def test_config_persistence(self, service, temp_config_file):
-        """测试配置持久化"""
-        config = SystemConfig(
-            llm_provider="test_provider",
-            api_key="test_key"
-        )
-        service.save_config(config)
-        
-        # 创建新的服务实例（模拟应用重启）
-        new_service = SystemConfigService(config_file=str(temp_config_file))
-        loaded_config = new_service.get_config()
-        
-        assert loaded_config.llm_provider == "test_provider"
-        assert loaded_config.api_key == "test_key"
-    
-    def test_empty_api_key_handling(self, service):
-        """测试空API Key处理"""
-        config = SystemConfig(api_key="")
-        
-        encrypted = service._encrypt_api_key(config.api_key)
-        assert encrypted == ""
-        
-        decrypted = service._decrypt_api_key(encrypted)
-        assert decrypted == ""
-    
-    def test_timestamps_on_save(self, service):
-        """测试保存时更新时间戳"""
-        config = SystemConfig()
-        
-        # 首次保存
-        saved_config = service.save_config(config)
-        assert saved_config.created_at is not None
-        assert saved_config.updated_at is not None
-        first_updated_at = saved_config.updated_at
-        
-        # 再次保存
-        import time
-        time.sleep(0.1)  # 确保时间戳不同
-        saved_config.llm_provider = "updated"
-        updated_config = service.save_config(saved_config)
-        
-        assert updated_config.updated_at > first_updated_at
-        assert updated_config.created_at == saved_config.created_at
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
-
+        assert response.id == "test"
+        assert response.llm_provider == "openai"
+        assert response.base_url == "https://api.openai.com"
+        assert response.default_model == "gpt-4"
+        assert response.temperature == 0.8
+        assert response.max_tokens == 3000

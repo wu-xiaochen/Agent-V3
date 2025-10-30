@@ -62,19 +62,6 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
       loadCrews()
     }
   }, [open])
-  
-  // 🆕 处理初始化Crew配置（AI生成时自动加载）
-  useEffect(() => {
-    if (initialCrewConfig && open) {
-      console.log("🎨 加载AI生成的Crew配置:", initialCrewConfig)
-      setSelectedCrew(initialCrewConfig)
-      // 转换为Canvas数据
-      const { nodes, edges } = convertCrewConfigToCanvas(initialCrewConfig)
-      setCanvasNodes(nodes)
-      setCanvasEdges(edges)
-      setIsCreating(false)
-    }
-  }, [initialCrewConfig, open])
 
   const loadCrews = async () => {
     try {
