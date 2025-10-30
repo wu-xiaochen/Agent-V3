@@ -532,6 +532,91 @@ async def clear_thinking_chain_history(session_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== 系统配置API ====================
+
+from src.models.system_config import SystemConfig, SystemConfigUpdate, SystemConfigResponse
+from src.services.system_config_service import SystemConfigService
+
+# 创建系统配置服务实例
+system_config_service = SystemConfigService()
+
+
+@app.get("/api/system/config", response_model=Dict[str, Any])
+async def get_system_config():
+    """
+    获取系统配置（API Key脱敏）
+    
+    Returns:
+        系统配置对象（API Key已脱敏）
+    """
+    try:
+        config = system_config_service.get_config()
+        response = SystemConfigResponse.from_system_config(config)
+        
+        return {
+            "success": True,
+            "config": response.model_dump(mode='json')
+        }
+    except Exception as e:
+        logger.error(f"❌ 获取系统配置失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/system/config", response_model=Dict[str, Any])
+async def update_system_config(update: Dict[str, Any]):
+    """
+    更新系统配置
+    
+    Args:
+        update: 配置更新数据
+        
+    Returns:
+        更新后的配置对象（API Key已脱敏）
+    """
+    try:
+        # 创建更新对象
+        config_update = SystemConfigUpdate(**update)
+        
+        # 更新配置
+        updated_config = system_config_service.update_config(config_update)
+        response = SystemConfigResponse.from_system_config(updated_config)
+        
+        logger.info(f"✅ 系统配置已更新: {update.keys()}")
+        
+        return {
+            "success": True,
+            "config": response.model_dump(mode='json'),
+            "message": "配置已更新"
+        }
+    except Exception as e:
+        logger.error(f"❌ 更新系统配置失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/system/config/reset", response_model=Dict[str, Any])
+async def reset_system_config():
+    """
+    重置系统配置为默认值
+    
+    Returns:
+        默认配置对象（API Key已脱敏）
+    """
+    try:
+        default_config = system_config_service.reset_to_default()
+        response = SystemConfigResponse.from_system_config(default_config)
+        
+        logger.info("✅ 系统配置已重置为默认值")
+        
+        return {
+            "success": True,
+            "config": response.model_dump(mode='json'),
+            "message": "配置已重置为默认值"
+        }
+    except Exception as e:
+        logger.error(f"❌ 重置系统配置失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/chat/sessions")
 async def list_sessions():
     """
