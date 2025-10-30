@@ -46,10 +46,18 @@ class ContextTracker:
             tool_name: 工具名称
             result: 执行结果
         """
+        # 🔥 修复: 如果result是dict类型，使用JSON序列化而非str()
+        import json
+        if isinstance(result, dict):
+            result_str = json.dumps(result, ensure_ascii=False)
+        else:
+            result_str = str(result)
+        
         self.tool_history.append({
             "timestamp": datetime.now(),
             "tool": tool_name,
-            "result_summary": str(result)[:200]  # 只保存摘要
+            "result_summary": result_str[:200] if len(result_str) > 200 else result_str,  # 只保存摘要
+            "result_raw": result if isinstance(result, dict) else None  # 保存原始dict对象
         })
         self.logger.debug(f"添加工具调用到历史: {tool_name}")
     
