@@ -153,26 +153,30 @@ export function ChatInterface() {
   const [crewDrawerOpen, setCrewDrawerOpen] = useState(false)
   const [pendingCrewConfig, setPendingCrewConfig] = useState<any | null>(null)
 
-  // 🆕 监听会话切换，清理状态并加载该会话的思维链历史
+  // 🆕 组件挂载时初始化默认session
   useEffect(() => {
-    console.log("🔄 Session changed to:", currentSession)
-    
-    // 🆕 确保当前session在localStorage中存在（初始化默认session）
+    // 确保默认session存在
     if (currentSession) {
       const sessionKey = `session_${currentSession}`
       const existingSession = localStorage.getItem(sessionKey)
       
       if (!existingSession) {
-        // 如果不存在，创建默认的空session
         const defaultSessionData = {
           sessionId: currentSession,
-          messages: messages, // 使用当前的messages
+          messages: [],
           timestamp: new Date().toISOString()
         }
         localStorage.setItem(sessionKey, JSON.stringify(defaultSessionData))
-        console.log(`💾 初始化默认session: ${currentSession}`)
+        console.log(`💾 [初始化] 创建默认session: ${currentSession}`)
+      } else {
+        console.log(`✅ [初始化] session已存在: ${currentSession}`)
       }
     }
+  }, []) // 只在组件挂载时执行一次
+
+  // 🆕 监听会话切换，清理状态并加载该会话的思维链历史
+  useEffect(() => {
+    console.log("🔄 Session changed to:", currentSession)
     
     // 切换会话时清理所有进行中的状态
     setIsLoading(false)
@@ -277,20 +281,23 @@ export function ChatInterface() {
     const requestSessionId = currentSession || "default"
     const currentMessageId = userMessage.id  // 🆕 保存当前消息ID
     
-    // 🆕 在addMessage之前先保存（确保立即持久化）
-    const updatedMessages = [...messages, userMessage]
+    // 然后更新UI状态（先更新state，因为messages来自state）
+    addMessage(userMessage)
     
-    // 立即保存会话到localStorage
+    // 🆕 立即保存到localStorage（使用更新后的messages）
+    // ⚠️ 注意：这里必须用[...messages, userMessage]，不能依赖state更新
+    const updatedMessages = [...messages, userMessage]
     const sessionData = {
       sessionId: requestSessionId,
       messages: updatedMessages,
       timestamp: new Date().toISOString()
     }
     localStorage.setItem(`session_${requestSessionId}`, JSON.stringify(sessionData))
-    console.log(`💾 用户输入后立即保存会话: ${requestSessionId}`, updatedMessages.length)
-    
-    // 然后更新UI状态
-    addMessage(userMessage)
+    console.log(`💾💾💾 [重要] 用户输入后立即保存会话到localStorage:`, {
+      sessionId: requestSessionId,
+      messagesCount: updatedMessages.length,
+      lastMessage: messageContent.substring(0, 30)
+    })
     
     setInput("")
     setIsLoading(true)
@@ -327,14 +334,30 @@ export function ChatInterface() {
               console.log(`🔄 轮询 #${pollCount}: 新增 ${chainData.thinking_chain.length - lastChainLength} 个步骤`)
               lastChainLength = chainData.thinking_chain.length
               
-              // 🆕 检测是否调用了crewai_generator工具
-              const crewGeneratorStep = chainData.thinking_chain.find(
-                step => step.type === 'action' && step.tool === 'crewai_generator'
+              // 🆕 检测crew生成完成（observation包含结果）
+              const crewObservation = chainData.thinking_chain.find(
+                step => step.type === 'observation' && 
+                        step.step > 0 && 
+                        step.content && 
+                        (step.content.includes('action') || step.content.includes('crew_config'))
               )
               
-              if (crewGeneratorStep && !crewDrawerOpen) {
-                console.log("🎨 检测到crewai_generator调用，立即打开画布！")
-                setCrewDrawerOpen(true)
+              if (crewObservation && !crewDrawerOpen) {
+                console.log("🎨 检测到crew生成完成，解析配置并打开画布")
+                try {
+                  // 尝试从observation中提取crew_config
+                  const observationContent = typeof crewObservation.content === 'string' 
+                    ? JSON.parse(crewObservation.content) 
+                    : crewObservation.content
+                  
+                  if (observationContent.crew_config) {
+                    console.log("📦 找到crew_config:", observationContent.crew_config)
+                    setPendingCrewConfig(observationContent.crew_config)
+                    setCrewDrawerOpen(true)
+                  }
+                } catch (e) {
+                  console.warn("⚠️ 解析observation失败:", e)
+                }
               }
               
               // 🆕 转换为工具调用格式（只显示action类型）
