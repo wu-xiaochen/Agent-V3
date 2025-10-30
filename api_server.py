@@ -1071,12 +1071,15 @@ async def upload_file(
                 logger.info(f"🔍 解析结果: {parse_result}")
                 
                 if parse_result.get("success"):
+                    # 🆕 统一字段名称：content -> full_text
+                    content = parse_result.get("full_text") or parse_result.get("content", "")
                     parsed_content = {
                         "type": parse_result.get("type"),
-                        "summary": parse_result.get("summary") or parse_result.get("full_text", "")[:500],
-                        "full_text": parse_result.get("full_text") or parse_result.get("content", "")
+                        "summary": parse_result.get("summary") or content[:500],  # 前500字符作为摘要
+                        "full_text": content,
+                        "metadata": parse_result.get("metadata", {})
                     }
-                    logger.info(f"📄 文档解析成功: {file.filename}, parsed_content keys: {parsed_content.keys()}")
+                    logger.info(f"📄 文档解析成功: {file.filename}, 内容长度: {len(content)} 字符")
                 else:
                     logger.warning(f"⚠️  文档解析失败: {parse_result.get('error')}")
                     
