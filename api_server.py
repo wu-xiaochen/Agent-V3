@@ -540,6 +540,17 @@ from src.services.system_config_service import SystemConfigService
 # 创建系统配置服务实例
 system_config_service = SystemConfigService()
 
+# 🆕 知识库服务
+from src.models.knowledge_base import (
+    KnowledgeBaseCreate,
+    KnowledgeBaseUpdate,
+    DocumentUploadRequest,
+    SearchRequest
+)
+from src.services.knowledge_base_service import KnowledgeBaseService
+
+knowledge_base_service = KnowledgeBaseService()
+
 
 @app.get("/api/system/config", response_model=Dict[str, Any])
 async def get_system_config():
@@ -2056,6 +2067,148 @@ async def reset_agent_configs():
 
 
 # ==================== 主入口 ====================
+
+# ==================== 知识库API ====================
+
+@app.post("/api/knowledge-bases", response_model=Dict[str, Any])
+async def create_knowledge_base(request: KnowledgeBaseCreate):
+    """创建知识库"""
+    try:
+        kb = knowledge_base_service.create_knowledge_base(request)
+        return {
+            "success": True,
+            "knowledge_base": kb.model_dump(),
+            "message": "知识库创建成功"
+        }
+    except Exception as e:
+        logger.error(f"创建知识库失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/knowledge-bases", response_model=Dict[str, Any])
+async def list_knowledge_bases():
+    """列出所有知识库"""
+    try:
+        kbs = knowledge_base_service.list_knowledge_bases()
+        return {
+            "success": True,
+            "knowledge_bases": [kb.model_dump() for kb in kbs],
+            "total": len(kbs)
+        }
+    except Exception as e:
+        logger.error(f"列出知识库失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/knowledge-bases/{kb_id}", response_model=Dict[str, Any])
+async def get_knowledge_base(kb_id: str):
+    """获取知识库详情"""
+    try:
+        kb = knowledge_base_service.get_knowledge_base(kb_id)
+        if not kb:
+            raise HTTPException(status_code=404, detail="知识库不存在")
+        
+        return {
+            "success": True,
+            "knowledge_base": kb.model_dump()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取知识库失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/knowledge-bases/{kb_id}", response_model=Dict[str, Any])
+async def update_knowledge_base(kb_id: str, request: KnowledgeBaseUpdate):
+    """更新知识库"""
+    try:
+        kb = knowledge_base_service.update_knowledge_base(kb_id, request)
+        if not kb:
+            raise HTTPException(status_code=404, detail="知识库不存在")
+        
+        return {
+            "success": True,
+            "knowledge_base": kb.model_dump(),
+            "message": "知识库更新成功"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"更新知识库失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/knowledge-bases/{kb_id}", response_model=Dict[str, Any])
+async def delete_knowledge_base(kb_id: str):
+    """删除知识库"""
+    try:
+        success = knowledge_base_service.delete_knowledge_base(kb_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="知识库不存在")
+        
+        return {
+            "success": True,
+            "message": "知识库删除成功"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"删除知识库失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/knowledge-bases/{kb_id}/documents", response_model=Dict[str, Any])
+async def upload_document(kb_id: str, request: DocumentUploadRequest):
+    """上传文档到知识库"""
+    try:
+        # 从文件管理器获取文件信息
+        file_info = file_manager.get_file_info(request.file_id)
+        if not file_info or not file_info.get("success"):
+            raise HTTPException(status_code=404, detail="文件不存在")
+        
+        file_path = file_info.get("path")
+        if not file_path or not Path(file_path).exists():
+            raise HTTPException(status_code=404, detail="文件路径无效")
+        
+        # 添加到知识库
+        doc = knowledge_base_service.add_document(
+            kb_id=kb_id,
+            file_path=file_path,
+            filename=file_info.get("filename", ""),
+            file_type=file_info.get("type", ""),
+            file_size=file_info.get("size", 0),
+            metadata=request.metadata
+        )
+        
+        if not doc:
+            raise HTTPException(status_code=500, detail="文档处理失败")
+        
+        return {
+            "success": True,
+            "document": doc.model_dump(),
+            "message": "文档上传成功"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"上传文档失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/knowledge-bases/{kb_id}/search", response_model=Dict[str, Any])
+async def search_knowledge_base(kb_id: str, request: SearchRequest):
+    """检索知识库"""
+    try:
+        # 确保request中的kb_id与路径参数一致
+        request.kb_id = kb_id
+        
+        response = knowledge_base_service.search(request)
+        return response.model_dump()
+    except Exception as e:
+        logger.error(f"检索知识库失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import argparse
