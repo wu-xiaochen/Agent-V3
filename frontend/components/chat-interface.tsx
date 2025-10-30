@@ -388,9 +388,17 @@ export function ChatInterface() {
                     // 先清理可能的非法字符
                     let cleanContent = crewObservation.content.trim()
                     
+                    console.log("🔍 准备解析JSON，原始内容前50字符:", cleanContent.substring(0, 50))
+                    
                     // 跳过明显不是JSON的内容
                     if (!cleanContent.startsWith('{') && !cleanContent.startsWith('[')) {
-                      console.warn("⚠️ observation内容不是JSON格式:", cleanContent.substring(0, 100))
+                      console.warn("⚠️ observation内容不是JSON格式，跳过:", cleanContent.substring(0, 100))
+                      return
+                    }
+                    
+                    // 跳过空对象或空数组
+                    if (cleanContent === '{}' || cleanContent === '[]') {
+                      console.warn("⚠️ observation是空对象/数组，跳过")
                       return
                     }
                     
@@ -400,10 +408,27 @@ export function ChatInterface() {
                       
                       // 尝试多个可能的字段
                       crewConfig = parsed.crew_config || parsed.config || parsed
-                    } catch (parseError) {
-                      console.error("❌ JSON解析失败:", parseError)
-                      console.log("尝试解析的内容:", cleanContent.substring(0, 200))
-                      return
+                    } catch (parseError: any) {
+                      console.error("❌ JSON解析失败:", parseError.message)
+                      console.log("📄 失败的JSON内容（前200字符）:", cleanContent.substring(0, 200))
+                      console.log("📄 失败的JSON内容（后50字符）:", cleanContent.substring(Math.max(0, cleanContent.length - 50)))
+                      
+                      // 尝试提取JSON部分（如果被其他文本包裹）
+                      const jsonMatch = cleanContent.match(/\{[\s\S]*\}|\[[\s\S]*\]/)
+                      if (jsonMatch) {
+                        console.log("🔧 尝试提取嵌入的JSON...")
+                        try {
+                          const parsed = JSON.parse(jsonMatch[0])
+                          console.log("✅ 提取的JSON解析成功:", parsed)
+                          crewConfig = parsed.crew_config || parsed.config || parsed
+                        } catch (retryError) {
+                          console.error("❌ 提取后仍然解析失败，放弃")
+                          return
+                        }
+                      } else {
+                        console.error("❌ 无法提取有效JSON，放弃")
+                        return
+                      }
                     }
                   } else if (typeof crewObservation.content === 'object') {
                     console.log("✅ observation是对象，直接提取")
