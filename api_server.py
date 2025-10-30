@@ -617,6 +617,215 @@ async def reset_system_config():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== 工具列表API ====================
+
+from src.infrastructure.tools.tool_registry import get_tool_registry, get_tool_factory
+
+
+@app.get("/api/tools/available", response_model=Dict[str, Any])
+async def get_available_tools():
+    """
+    获取所有可用工具列表（用于CrewAI工具选择）
+    
+    Returns:
+        {
+            "success": bool,
+            "tools": [
+                {
+                    "name": str,
+                    "display_name": str,
+                    "type": str,  # builtin, mcp, api
+                    "enabled": bool,
+                    "description": str,
+                    "parameters": dict  # 工具参数schema（可选）
+                },
+                ...
+            ],
+            "total": int,
+            "groups": dict  # 工具组信息
+        }
+    """
+    try:
+        registry = get_tool_registry()
+        
+        # 确保工具已加载
+        if not registry._tools:
+            success = registry.load_from_config()
+            if not success:
+                logger.warning("⚠️  工具注册器加载失败，返回空列表")
+                return {
+                    "success": False,
+                    "tools": [],
+                    "total": 0,
+                    "groups": {},
+                    "message": "工具配置加载失败"
+                }
+        
+        # 获取所有工具信息
+        all_tools = []
+        for name, tool_def in registry._tools.items():
+            tool_info = {
+                "name": name,
+                "display_name": tool_def.display_name,
+                "type": tool_def.type,
+                "enabled": tool_def.enabled,
+                "description": tool_def.description or f"{tool_def.display_name}工具",
+                "module": tool_def.module,
+            }
+            
+            # 添加参数信息（如果有）
+            if tool_def.parameters:
+                tool_info["parameters"] = tool_def.parameters
+            
+            # 添加配置信息（用于MCP等）
+            if tool_def.config:
+                tool_info["config"] = tool_def.config
+            
+            all_tools.append(tool_info)
+        
+        # 获取工具组信息
+        tool_groups = registry._tool_groups
+        
+        logger.info(f"✅ 返回 {len(all_tools)} 个可用工具")
+        
+        return {
+            "success": True,
+            "tools": all_tools,
+            "total": len(all_tools),
+            "groups": tool_groups,
+            "enabled_count": len([t for t in all_tools if t["enabled"]])
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ 获取工具列表失败: {e}")
+        import traceback
+        logger.debug(traceback.format_exc())
+        return {
+            "success": False,
+            "tools": [],
+            "total": 0,
+            "groups": {},
+            "message": f"获取工具列表失败: {str(e)}"
+        }
+
+
+@app.get("/api/tools/enabled", response_model=Dict[str, Any])
+async def get_enabled_tools():
+    """
+    仅获取启用的工具列表
+    
+    Returns:
+        {
+            "success": bool,
+            "tools": [...],  # 只包含enabled=True的工具
+            "total": int
+        }
+    """
+    try:
+        registry = get_tool_registry()
+        
+        if not registry._tools:
+            registry.load_from_config()
+        
+        # 只获取启用的工具
+        enabled_tool_names = registry.get_enabled_tools()
+        enabled_tools = []
+        
+        for name in enabled_tool_names:
+            tool_def = registry.get_tool_definition(name)
+            if tool_def:
+                enabled_tools.append({
+                    "name": name,
+                    "display_name": tool_def.display_name,
+                    "type": tool_def.type,
+                    "description": tool_def.description or f"{tool_def.display_name}工具",
+                })
+        
+        logger.info(f"✅ 返回 {len(enabled_tools)} 个启用的工具")
+        
+        return {
+            "success": True,
+            "tools": enabled_tools,
+            "total": len(enabled_tools)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ 获取启用工具列表失败: {e}")
+        return {
+            "success": False,
+            "tools": [],
+            "total": 0,
+            "message": str(e)
+        }
+
+
+@app.get("/api/tools/groups/{group_name}", response_model=Dict[str, Any])
+async def get_tools_by_group(group_name: str):
+    """
+    获取指定工具组的工具列表
+    
+    Args:
+        group_name: 工具组名称（如 basic, advanced, mcp等）
+    
+    Returns:
+        {
+            "success": bool,
+            "group_name": str,
+            "tools": [...],
+            "total": int
+        }
+    """
+    try:
+        registry = get_tool_registry()
+        
+        if not registry._tools:
+            registry.load_from_config()
+        
+        # 获取工具组中的工具名称
+        tool_names = registry.get_tools_by_group(group_name)
+        
+        if not tool_names:
+            return {
+                "success": False,
+                "group_name": group_name,
+                "tools": [],
+                "total": 0,
+                "message": f"工具组 '{group_name}' 不存在或为空"
+            }
+        
+        # 获取工具详细信息
+        tools = []
+        for name in tool_names:
+            tool_def = registry.get_tool_definition(name)
+            if tool_def:
+                tools.append({
+                    "name": name,
+                    "display_name": tool_def.display_name,
+                    "type": tool_def.type,
+                    "enabled": tool_def.enabled,
+                    "description": tool_def.description,
+                })
+        
+        logger.info(f"✅ 返回工具组 '{group_name}' 的 {len(tools)} 个工具")
+        
+        return {
+            "success": True,
+            "group_name": group_name,
+            "tools": tools,
+            "total": len(tools)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ 获取工具组失败: {e}")
+        return {
+            "success": False,
+            "group_name": group_name,
+            "tools": [],
+            "total": 0,
+            "message": str(e)
+        }
+
+
 @app.get("/api/chat/sessions")
 async def list_sessions():
     """

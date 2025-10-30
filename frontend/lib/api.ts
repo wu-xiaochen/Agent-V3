@@ -493,6 +493,8 @@ export const healthAPI = {
 // 导出所有 API
 // 导入系统配置API
 import { systemApi } from './api/system'
+// 导入工具列表API
+import { toolsListApi } from './api/tools'
 
 export const api = {
   chat: chatAPI,
@@ -503,6 +505,7 @@ export const api = {
   crewai: crewaiAPI,
   health: healthAPI,
   system: systemApi,  // 🆕 系统配置API
+  toolsList: toolsListApi,  // 🆕 工具列表API（用于CrewAI）
 }
 
 export default api
