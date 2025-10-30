@@ -1457,6 +1457,163 @@ async def execute_crew(crew_id: str, inputs: dict = {}):
         }
 
 
+@app.post("/api/crewai/crews/{crew_id}/execute/stream")
+async def execute_crew_stream(crew_id: str, inputs: dict = {}):
+    """
+    流式执行Crew，实时返回执行状态
+    
+    使用Server-Sent Events (SSE)格式返回：
+    - data: {type: "status", message: "...", timestamp: "..."}
+    - data: {type: "agent_start", agent: "...", timestamp: "..."}
+    - data: {type: "task_start", task: "...", timestamp: "..."}
+    - data: {type: "log", message: "...", timestamp: "..."}
+    - data: {type: "progress", current: X, total: Y, percentage: Z}
+    - data: {type: "result", output: "...", duration: X}
+    - data: {type: "error", error: "...", traceback: "..."}
+    - data: {type: "done"}
+    
+    Args:
+        crew_id: Crew ID
+        inputs: 执行输入参数
+    
+    Returns:
+        StreamingResponse (SSE格式)
+    """
+    crew_config = _load_crew(crew_id)
+    if not crew_config:
+        raise HTTPException(status_code=404, detail="Crew not found")
+    
+    async def event_generator():
+        """生成SSE事件流"""
+        try:
+            from datetime import datetime
+            import time
+            import asyncio
+            from crewai import Crew, Agent, Task, Process
+            
+            execution_id = f"exec_{crew_id}_{int(datetime.now().timestamp())}"
+            start_time = time.time()
+            
+            # 发送开始事件
+            yield f"data: {json.dumps({'type': 'start', 'execution_id': execution_id, 'crew_name': crew_config.get('name', crew_id), 'timestamp': datetime.now().isoformat()})}\n\n"
+            await asyncio.sleep(0.1)
+            
+            logger.info(f"🚀 开始流式执行Crew: {crew_id}")
+            
+            # 1. 创建Agents
+            agents = []
+            agent_configs = crew_config.get("agents", [])
+            total_agents = len(agent_configs)
+            
+            yield f"data: {json.dumps({'type': 'status', 'message': f'创建 {total_agents} 个Agent...', 'timestamp': datetime.now().isoformat()})}\n\n"
+            await asyncio.sleep(0.1)
+            
+            for idx, agent_config in enumerate(agent_configs):
+                agent_role = agent_config.get('role', 'Unknown Agent')
+                
+                # 发送Agent创建事件
+                yield f"data: {json.dumps({'type': 'agent_start', 'agent': agent_role, 'index': idx + 1, 'total': total_agents, 'timestamp': datetime.now().isoformat()})}\n\n"
+                await asyncio.sleep(0.05)
+                
+                agent = Agent(
+                    role=agent_config.get("role", "Agent"),
+                    goal=agent_config.get("goal", "Complete the task"),
+                    backstory=agent_config.get("backstory", "I am a helpful assistant"),
+                    verbose=True,
+                    allow_delegation=agent_config.get("allow_delegation", False),
+                    max_iter=agent_config.get("max_iter", 15),
+                    memory=agent_config.get("memory", True)
+                )
+                agents.append(agent)
+                
+                # 发送进度更新
+                yield f"data: {json.dumps({'type': 'progress', 'step': 'agents', 'current': idx + 1, 'total': total_agents, 'percentage': int((idx + 1) / total_agents * 100), 'timestamp': datetime.now().isoformat()})}\n\n"
+                await asyncio.sleep(0.05)
+            
+            # 2. 创建Tasks
+            tasks = []
+            task_configs = crew_config.get("tasks", [])
+            total_tasks = len(task_configs)
+            
+            yield f"data: {json.dumps({'type': 'status', 'message': f'创建 {total_tasks} 个Task...', 'timestamp': datetime.now().isoformat()})}\n\n"
+            await asyncio.sleep(0.1)
+            
+            for idx, task_config in enumerate(task_configs):
+                task_desc = task_config.get('description', 'Unknown Task')[:50]
+                
+                # 发送Task创建事件
+                yield f"data: {json.dumps({'type': 'task_start', 'task': task_desc, 'index': idx + 1, 'total': total_tasks, 'timestamp': datetime.now().isoformat()})}\n\n"
+                await asyncio.sleep(0.05)
+                
+                # 分配agent
+                agent_role = task_config.get("agent", "")
+                assigned_agent = agents[0]  # 默认第一个agent
+                for agent in agents:
+                    if agent.role == agent_role:
+                        assigned_agent = agent
+                        break
+                
+                task = Task(
+                    description=task_config.get("description", "Complete this task"),
+                    expected_output=task_config.get("expected_output", "Task completed"),
+                    agent=assigned_agent
+                )
+                tasks.append(task)
+                
+                # 发送进度更新
+                yield f"data: {json.dumps({'type': 'progress', 'step': 'tasks', 'current': idx + 1, 'total': total_tasks, 'percentage': int((idx + 1) / total_tasks * 100), 'timestamp': datetime.now().isoformat()})}\n\n"
+                await asyncio.sleep(0.05)
+            
+            # 3. 创建并执行Crew
+            yield f"data: {json.dumps({'type': 'status', 'message': '创建Crew实例...', 'timestamp': datetime.now().isoformat()})}\n\n"
+            await asyncio.sleep(0.1)
+            
+            crew = Crew(
+                agents=agents,
+                tasks=tasks,
+                process=Process.sequential,
+                verbose=True
+            )
+            
+            yield f"data: {json.dumps({'type': 'status', 'message': '开始执行任务...', 'timestamp': datetime.now().isoformat()})}\n\n"
+            yield f"data: {json.dumps({'type': 'execution_start', 'total_tasks': total_tasks, 'timestamp': datetime.now().isoformat()})}\n\n"
+            await asyncio.sleep(0.1)
+            
+            # 执行Crew（这里是同步的，CrewAI暂不支持真正的异步流式）
+            # 在实际执行过程中，我们可以通过回调或日志捕获来发送更新
+            result = await asyncio.to_thread(crew.kickoff, inputs=inputs)
+            
+            duration = time.time() - start_time
+            
+            # 发送完成事件
+            yield f"data: {json.dumps({'type': 'result', 'output': str(result) if result else 'No output', 'duration': duration, 'timestamp': datetime.now().isoformat()})}\n\n"
+            await asyncio.sleep(0.1)
+            
+            yield f"data: {json.dumps({'type': 'done', 'execution_id': execution_id, 'duration': duration, 'timestamp': datetime.now().isoformat()})}\n\n"
+            
+            logger.info(f"✅ Crew流式执行成功: {execution_id}, 耗时: {duration:.2f}s")
+            
+        except Exception as e:
+            logger.error(f"❌ 流式执行Crew失败: {e}")
+            import traceback
+            error_trace = traceback.format_exc()
+            
+            # 发送错误事件
+            yield f"data: {json.dumps({'type': 'error', 'error': str(e), 'traceback': error_trace, 'timestamp': datetime.now().isoformat()})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'success': False, 'timestamp': datetime.now().isoformat()})}\n\n"
+    
+    from starlette.responses import StreamingResponse
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # 禁用nginx缓冲
+        }
+    )
+
+
 # ==================== 工具配置管理 API ====================
 
 @app.get("/api/tools/configs")
