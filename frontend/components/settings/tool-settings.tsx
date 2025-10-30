@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select"
 import { Settings, ChevronRight, RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { toolsApi, type ToolConfig, type ToolConfigUpdate } from "@/lib/api/tools"
+import { toolsListApi, type ToolConfig, type ToolConfigUpdate } from "@/lib/api/tools"
 
 export function ToolSettings() {
   const [tools, setTools] = useState<ToolConfig[]>([])
@@ -43,7 +43,7 @@ export function ToolSettings() {
   const loadTools = async () => {
     try {
       setLoading(true)
-      const configs = await toolsApi.getAllConfigs()
+      const configs = await toolsListApi.getAllConfigs()
       setTools(configs)
     } catch (error) {
       console.error('Failed to load tools:', error)
@@ -62,7 +62,7 @@ export function ToolSettings() {
     if (!tool) return
 
     try {
-      const updated = await toolsApi.updateConfig(toolId, {
+      const updated = await toolsListApi.updateConfig(toolId, {
         enabled: !tool.enabled
       })
       
@@ -93,7 +93,7 @@ export function ToolSettings() {
         description: updatedTool.description
       }
       
-      const result = await toolsApi.updateConfig(updatedTool.tool_id, update)
+      const result = await toolsListApi.updateConfig(updatedTool.tool_id, update)
       
       setTools(tools.map(t => t.tool_id === result.tool_id ? result : t))
       setIsDialogOpen(false)
@@ -115,7 +115,7 @@ export function ToolSettings() {
 
   const handleReset = async () => {
     try {
-      const configs = await toolsApi.resetToDefault()
+      const configs = await toolsListApi.resetToDefault()
       setTools(configs)
       toast({
         title: "Reset successful",

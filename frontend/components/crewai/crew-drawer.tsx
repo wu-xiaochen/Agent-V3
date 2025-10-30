@@ -655,7 +655,7 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
                           />
                           
                           {/* 保留旧的结果显示（用于查看历史结果） */}
-                          {!isExecuting && executionResult && (
+                          {!isExecuting && executionResult ? (
                             // 执行结果
                             <>
                               {/* 执行摘要 */}
@@ -725,16 +725,7 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
                                 </div>
                               )}
                             </>
-                          ) : (
-                            // 无结果状态
-                            <div className="text-center text-muted-foreground py-12">
-                              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
-                                <PlayCircle className="h-8 w-8" />
-                              </div>
-                              <p className="text-lg font-semibold">No execution results yet</p>
-                              <p className="text-sm">Click "Run Crew" to execute the team</p>
-                            </div>
-                          )}
+                          ) : null}
                         </div>
                       </ScrollArea>
                     </TabsContent>
