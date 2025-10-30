@@ -1163,6 +1163,171 @@ async def execute_crew(crew_id: str, inputs: dict = {}):
         }
 
 
+# ==================== 工具配置管理 API ====================
+
+@app.get("/api/tools/configs")
+async def get_tool_configs():
+    """
+    获取所有工具配置
+    
+    Returns:
+        工具配置列表
+    """
+    try:
+        from src.services.tool_config_service import get_tool_config_service
+        
+        service = get_tool_config_service()
+        configs = service.get_all_configs()
+        
+        return {
+            "success": True,
+            "tools": [config.model_dump(mode='json') for config in configs],
+            "total": len(configs)
+        }
+    except Exception as e:
+        logger.error(f"Failed to get tool configs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/tools/{tool_id}/config")
+async def get_tool_config(tool_id: str):
+    """
+    获取单个工具配置
+    
+    Args:
+        tool_id: 工具ID
+        
+    Returns:
+        工具配置
+    """
+    try:
+        from src.services.tool_config_service import get_tool_config_service
+        
+        service = get_tool_config_service()
+        config = service.get_config(tool_id)
+        
+        if not config:
+            raise HTTPException(status_code=404, detail=f"Tool {tool_id} not found")
+        
+        return {
+            "success": True,
+            "tool": config.model_dump(mode='json')
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get tool config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/tools/{tool_id}/config")
+async def update_tool_config(tool_id: str, update: Dict[str, Any]):
+    """
+    更新单个工具配置
+    
+    Args:
+        tool_id: 工具ID
+        update: 更新数据
+        
+    Returns:
+        更新后的工具配置
+    """
+    try:
+        from src.services.tool_config_service import get_tool_config_service
+        from src.models.tool_config import ToolConfigUpdate
+        
+        service = get_tool_config_service()
+        
+        # 验证工具是否存在
+        if not service.get_config(tool_id):
+            raise HTTPException(status_code=404, detail=f"Tool {tool_id} not found")
+        
+        # 创建更新对象
+        config_update = ToolConfigUpdate(**update)
+        
+        # 更新配置
+        updated_config = service.update_config(tool_id, config_update)
+        
+        if not updated_config:
+            raise HTTPException(status_code=500, detail="Failed to update tool config")
+        
+        logger.info(f"Updated tool config for {tool_id}")
+        
+        return {
+            "success": True,
+            "message": f"Tool {tool_id} config updated successfully",
+            "tool": updated_config.model_dump(mode='json')
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update tool config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/tools/configs/batch")
+async def batch_update_tool_configs(configs: List[Dict[str, Any]]):
+    """
+    批量更新工具配置
+    
+    Args:
+        configs: 工具配置列表
+        
+    Returns:
+        更新后的所有工具配置
+    """
+    try:
+        from src.services.tool_config_service import get_tool_config_service
+        from src.models.tool_config import ToolConfig
+        
+        service = get_tool_config_service()
+        
+        # 解析配置
+        tool_configs = [ToolConfig(**config) for config in configs]
+        
+        # 批量更新
+        updated_configs = service.update_all_configs(tool_configs)
+        
+        logger.info(f"Batch updated {len(updated_configs)} tool configs")
+        
+        return {
+            "success": True,
+            "message": f"Updated {len(updated_configs)} tool configs",
+            "tools": [config.model_dump(mode='json') for config in updated_configs],
+            "total": len(updated_configs)
+        }
+    except Exception as e:
+        logger.error(f"Failed to batch update tool configs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/tools/configs/reset")
+async def reset_tool_configs():
+    """
+    重置工具配置为默认值
+    
+    Returns:
+        默认工具配置列表
+    """
+    try:
+        from src.services.tool_config_service import get_tool_config_service
+        
+        service = get_tool_config_service()
+        configs = service.reset_to_default()
+        
+        logger.info("Reset tool configs to default")
+        
+        return {
+            "success": True,
+            "message": "Tool configs reset to default",
+            "tools": [config.model_dump(mode='json') for config in configs],
+            "total": len(configs)
+        }
+    except Exception as e:
+        logger.error(f"Failed to reset tool configs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== 主入口 ====================
 
 if __name__ == "__main__":
