@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { MessageSquare, Plus, Database, Users, Settings, ChevronLeft, ChevronRight, Trash2, RefreshCw } from "lucide-react"
+import { MessageSquare, Plus, Database, Users, Settings, ChevronLeft, ChevronRight, Trash2, RefreshCw, Edit2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useAppStore } from "@/lib/store"
@@ -322,27 +322,49 @@ export function Sidebar({ collapsed: externalCollapsed }: SidebarProps = {}) {
                 )} />
                 {!collapsed && (
                   <>
-                    <div className="flex-1 min-w-0 mr-8">
+                    {/* 内容区域 - 预留右侧空间给按钮 */}
+                    <div className="flex-1 min-w-0 pr-14 overflow-hidden">
                       <SessionTitleEditor
                         sessionId={session.session_id}
                         title={session.last_message + (session.is_local ? " (新建)" : "")}
                         onSave={handleSaveTitle}
                         className={cn(
+                          "truncate",
                           session.is_active ? "text-primary font-medium" : "text-sidebar-foreground"
                         )}
                       />
-                      <p className="text-xs text-sidebar-muted-foreground">
+                      <p className="text-xs text-sidebar-muted-foreground truncate">
                         {session.message_count} messages
                       </p>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 shrink-0 absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10"
-                      onClick={(e) => handleDeleteSession(session.session_id, e)}
-                    >
-                      <Trash2 className="h-3 w-3 text-destructive" />
-                    </Button>
+                    
+                    {/* 按钮组 - 绝对定位，hover显示，平齐排列 */}
+                    <div className="absolute right-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0 hover:bg-primary/10"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          // 触发编辑模式
+                          const titleEditor = e.currentTarget.closest('.group')?.querySelector('input')
+                          if (titleEditor) {
+                            (titleEditor as HTMLInputElement).focus()
+                            ;(titleEditor as HTMLInputElement).select()
+                          }
+                        }}
+                      >
+                        <Edit2 className="h-3 w-3 text-muted-foreground" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0 hover:bg-destructive/10"
+                        onClick={(e) => handleDeleteSession(session.session_id, e)}
+                      >
+                        <Trash2 className="h-3 w-3 text-destructive" />
+                      </Button>
+                    </div>
                   </>
                 )}
               </div>
