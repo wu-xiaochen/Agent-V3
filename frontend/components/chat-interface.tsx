@@ -497,11 +497,13 @@ export function ChatInterface() {
   return (
     <div className="flex-1 flex flex-col h-screen">
       <div className="border-b border-border p-4 bg-card flex-shrink-0 flex items-center justify-between">
-        <div>
+        <div className="flex-1">
           <h2 className="text-lg font-semibold text-card-foreground">Chat Assistant</h2>
           <p className="text-sm text-muted-foreground">Ask me anything about your AI agents</p>
         </div>
-        <CrewDrawer />
+        <div className="flex items-center gap-2">
+          <CrewDrawer />
+        </div>
       </div>
 
       <ScrollArea className="flex-1 p-4 overflow-hidden" ref={scrollAreaRef}>

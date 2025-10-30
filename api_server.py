@@ -932,6 +932,146 @@ async def list_tools():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== CrewAI API ====================
+
+# CrewAI数据存储目录
+CREWS_DIR = "data/crews"
+Path(CREWS_DIR).mkdir(parents=True, exist_ok=True)
+
+def _get_crew_file(crew_id: str) -> Path:
+    return Path(CREWS_DIR) / f"{crew_id}.json"
+
+def _load_crew(crew_id: str) -> Optional[dict]:
+    file_path = _get_crew_file(crew_id)
+    if file_path.exists():
+        with open(file_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+def _save_crew(crew: dict):
+    file_path = _get_crew_file(crew["id"])
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(crew, f, indent=2, ensure_ascii=False)
+
+@app.post("/api/crewai/crews")
+async def create_crew(crew: dict):
+    """创建新的Crew配置"""
+    try:
+        from datetime import datetime
+        crew["createdAt"] = datetime.now().isoformat()
+        crew["updatedAt"] = datetime.now().isoformat()
+        
+        _save_crew(crew)
+        
+        return {
+            "success": True,
+            "crew_id": crew["id"],
+            "message": "Crew created successfully"
+        }
+    except Exception as e:
+        logger.error(f"❌ 创建Crew失败: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create crew: {str(e)}")
+
+@app.get("/api/crewai/crews")
+async def list_crews():
+    """获取所有Crew列表"""
+    try:
+        crews = []
+        crews_path = Path(CREWS_DIR)
+        if crews_path.exists():
+            for file_path in crews_path.glob("*.json"):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    crew = json.load(f)
+                    crews.append({
+                        "id": crew["id"],
+                        "name": crew["name"],
+                        "description": crew["description"],
+                        "agentCount": len(crew.get("agents", [])),
+                        "taskCount": len(crew.get("tasks", [])),
+                        "createdAt": crew.get("createdAt"),
+                        "updatedAt": crew.get("updatedAt")
+                    })
+        
+        return {
+            "success": True,
+            "crews": crews
+        }
+    except Exception as e:
+        logger.error(f"❌ 列出Crew失败: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to list crews: {str(e)}")
+
+@app.get("/api/crewai/crews/{crew_id}")
+async def get_crew(crew_id: str):
+    """获取Crew详情"""
+    crew = _load_crew(crew_id)
+    if not crew:
+        raise HTTPException(status_code=404, detail="Crew not found")
+    
+    return {
+        "success": True,
+        "crew": crew
+    }
+
+@app.put("/api/crewai/crews/{crew_id}")
+async def update_crew(crew_id: str, crew: dict):
+    """更新Crew配置"""
+    existing_crew = _load_crew(crew_id)
+    if not existing_crew:
+        raise HTTPException(status_code=404, detail="Crew not found")
+    
+    try:
+        from datetime import datetime
+        crew["createdAt"] = existing_crew.get("createdAt", datetime.now().isoformat())
+        crew["updatedAt"] = datetime.now().isoformat()
+        
+        _save_crew(crew)
+        
+        return {
+            "success": True,
+            "message": "Crew updated successfully"
+        }
+    except Exception as e:
+        logger.error(f"❌ 更新Crew失败: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update crew: {str(e)}")
+
+@app.delete("/api/crewai/crews/{crew_id}")
+async def delete_crew(crew_id: str):
+    """删除Crew"""
+    file_path = _get_crew_file(crew_id)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Crew not found")
+    
+    try:
+        file_path.unlink()
+        return {
+            "success": True,
+            "message": "Crew deleted successfully"
+        }
+    except Exception as e:
+        logger.error(f"❌ 删除Crew失败: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete crew: {str(e)}")
+
+@app.post("/api/crewai/crews/{crew_id}/execute")
+async def execute_crew(crew_id: str, inputs: dict = {}):
+    """执行Crew"""
+    crew = _load_crew(crew_id)
+    if not crew:
+        raise HTTPException(status_code=404, detail="Crew not found")
+    
+    try:
+        from datetime import datetime
+        # TODO: 实现实际的CrewAI执行逻辑
+        
+        return {
+            "success": True,
+            "execution_id": f"exec_{crew_id}_{int(datetime.now().timestamp())}",
+            "message": "Crew execution started (implementation pending)"
+        }
+    except Exception as e:
+        logger.error(f"❌ 执行Crew失败: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to execute crew: {str(e)}")
+
+
 # ==================== 主入口 ====================
 
 if __name__ == "__main__":

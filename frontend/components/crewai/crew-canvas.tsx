@@ -22,6 +22,8 @@ import type { FlowNode, FlowEdge, CrewAgent, CrewTask } from "@/lib/types/crewai
 // 自定义节点组件
 import { AgentNode } from "./agent-node"
 import { TaskNode } from "./task-node"
+import { AgentConfigPanel } from "./agent-config-panel"
+import { TaskConfigPanel } from "./task-config-panel"
 
 const nodeTypes = {
   agent: AgentNode,
@@ -46,6 +48,7 @@ export function CrewCanvas({
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
+  const [showConfigPanel, setShowConfigPanel] = useState(false)
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -109,6 +112,34 @@ export function CrewCanvas({
 
   const handleNodeClick = (_event: React.MouseEvent, node: Node) => {
     setSelectedNode(node)
+    setShowConfigPanel(true)
+  }
+
+  const handleUpdateNode = (updatedData: CrewAgent | CrewTask) => {
+    if (!selectedNode) return
+    
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id === selectedNode.id) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              [node.type === "agent" ? "agent" : "task"]: updatedData,
+              label: updatedData.name || (updatedData as CrewTask).description?.slice(0, 20) || "Untitled",
+            },
+          }
+        }
+        return node
+      })
+    )
+  }
+
+  const getAllAgents = (): CrewAgent[] => {
+    return nodes
+      .filter((n) => n.type === "agent")
+      .map((n) => n.data.agent)
+      .filter(Boolean)
   }
 
   const handleDeleteNode = useCallback(() => {
@@ -166,22 +197,31 @@ export function CrewCanvas({
         </Panel>
       </ReactFlow>
 
-      {/* 节点详情面板 */}
-      {selectedNode && (
-        <Card className="absolute bottom-4 right-4 w-80 p-4 space-y-2 bg-background/95 backdrop-blur">
-          <h3 className="font-semibold">Node Details</h3>
-          <div className="text-sm space-y-1">
-            <div>
-              <span className="text-muted-foreground">Type:</span> {selectedNode.type}
-            </div>
-            <div>
-              <span className="text-muted-foreground">ID:</span> {selectedNode.id}
-            </div>
-            <div>
-              <span className="text-muted-foreground">Label:</span> {selectedNode.data.label}
-            </div>
-          </div>
-        </Card>
+      {/* 配置面板 */}
+      {showConfigPanel && selectedNode && (
+        <>
+          {selectedNode.type === "agent" && selectedNode.data.agent && (
+            <AgentConfigPanel
+              agent={selectedNode.data.agent}
+              onUpdate={handleUpdateNode}
+              onClose={() => {
+                setShowConfigPanel(false)
+                setSelectedNode(null)
+              }}
+            />
+          )}
+          {selectedNode.type === "task" && selectedNode.data.task && (
+            <TaskConfigPanel
+              task={selectedNode.data.task}
+              agents={getAllAgents()}
+              onUpdate={handleUpdateNode}
+              onClose={() => {
+                setShowConfigPanel(false)
+                setSelectedNode(null)
+              }}
+            />
+          )}
+        </>
       )}
     </div>
   )
