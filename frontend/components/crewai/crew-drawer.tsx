@@ -20,6 +20,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { CrewCanvas } from "./crew-canvas"
+import { CrewExecutionMonitor } from "./crew-execution-monitor"
 import type { CrewConfig } from "@/lib/types/crewai"
 import { api } from "@/lib/api"
 import { 
@@ -506,17 +507,32 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
 
                     <TabsContent value="results" className="flex-1">
                       <ScrollArea className="h-[calc(100vh-240px)]">
-                        <div className="p-6 space-y-4">
-                          {isExecuting ? (
-                            // 执行中状态
-                            <div className="flex items-center justify-center py-12">
-                              <div className="text-center">
-                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                                <p className="text-lg font-semibold">Executing Crew...</p>
-                                <p className="text-sm text-muted-foreground">Please wait while the team completes the tasks</p>
-                              </div>
-                            </div>
-                          ) : executionResult ? (
+                        <div className="p-6">
+                          {/* 🆕 使用新的实时执行监控组件 */}
+                          <CrewExecutionMonitor
+                            crewId={selectedCrew.id}
+                            inputs={{}}
+                            onComplete={(result) => {
+                              setExecutionResult(result)
+                              setIsExecuting(false)
+                              toast({
+                                title: "Execution completed",
+                                description: `Crew executed successfully in ${result.duration?.toFixed(2)}s`
+                              })
+                            }}
+                            onError={(error) => {
+                              setExecutionResult(error)
+                              setIsExecuting(false)
+                              toast({
+                                title: "Execution failed",
+                                description: error.error || "An error occurred",
+                                variant: "destructive"
+                              })
+                            }}
+                          />
+                          
+                          {/* 保留旧的结果显示（用于查看历史结果） */}
+                          {!isExecuting && executionResult && (
                             // 执行结果
                             <>
                               {/* 执行摘要 */}
