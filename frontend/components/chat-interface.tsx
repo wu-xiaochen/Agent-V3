@@ -288,10 +288,8 @@ export function ChatInterface() {
     try {
       const { api } = await import("@/lib/api")
       
-      // 🆕 清空后端的思维链历史（开始新对话）
-      await api.thinking.clearThinkingChain(requestSessionId)
-      
       // 🆕 开始轮询思维链历史（200ms快速轮询，实时显示）
+      // ⚠️ 不清空历史，让后端自动覆盖，这样轮询能立即看到数据
       pollInterval = setInterval(async () => {
         try {
           pollCount++
@@ -301,6 +299,16 @@ export function ChatInterface() {
           console.log("📦 思维链数据:", chainData)
           
           if (chainData.success && chainData.thinking_chain.length > 0) {
+            // 🆕 检测是否调用了crewai_generator工具
+            const crewGeneratorStep = chainData.thinking_chain.find(
+              step => step.type === 'action' && step.tool === 'crewai_generator'
+            )
+            
+            if (crewGeneratorStep && !crewDrawerOpen) {
+              console.log("🎨 检测到crewai_generator调用，立即打开画布！")
+              setCrewDrawerOpen(true)
+            }
+            
             // 🆕 转换思维链数据为工具调用格式（用于UI展示）
             const toolSteps = chainData.thinking_chain
               .filter(step => step.type === 'action' || step.type === 'observation')

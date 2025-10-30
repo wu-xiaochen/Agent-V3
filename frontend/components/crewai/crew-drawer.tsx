@@ -224,13 +224,17 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
   
   // 🆕 删除Crew
   const handleDeleteCrew = async (crewId: string) => {
-    if (!confirm("确定要删除这个Crew吗？")) {
+    console.log("🗑️ 准备删除Crew:", crewId)
+    
+    if (!confirm(`确定要删除这个Crew吗？\nID: ${crewId}`)) {
       return
     }
     
     try {
       setLoading(true)
+      console.log("🗑️ 调用删除API:", crewId)
       const result = await api.crewai.deleteCrew(crewId)
+      console.log("✅ 删除结果:", result)
       if (result.success) {
         toast({
           title: "删除成功",
@@ -368,6 +372,7 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
                     <TabsContent value="canvas" className="flex-1 m-0 p-0">
                       <div className="h-[calc(100vh-240px)]">
                         <CrewCanvas
+                          key={selectedCrew.id}  // ← 强制重新挂载，确保状态同步
                           crewId={selectedCrew.id}
                           initialNodes={canvasNodes}
                           initialEdges={canvasEdges}
