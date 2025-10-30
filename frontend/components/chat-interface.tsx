@@ -76,17 +76,30 @@ export function ChatInterface() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { messages, addMessage, currentSession } = useAppStore()
 
-  // ✅ 修复：使用 scrollIntoView 确保滚动生效
+  // ✅ 真正修复：直接操作Radix UI的Viewport元素
   useEffect(() => {
-    // 使用 requestAnimationFrame 确保 DOM 已完成渲染
-    requestAnimationFrame(() => {
-      if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ 
-          behavior: 'smooth',
-          block: 'end'
+    const scrollToBottom = () => {
+      if (!scrollAreaRef.current) return
+      
+      // 找到Radix UI创建的viewport元素
+      const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]')
+      
+      if (viewport) {
+        // 直接设置scrollTop到最大值，确保滚动到底部
+        viewport.scrollTop = viewport.scrollHeight
+        
+        // 调试日志
+        console.log('📜 Scrolling:', {
+          scrollHeight: viewport.scrollHeight,
+          scrollTop: viewport.scrollTop,
+          clientHeight: viewport.clientHeight
         })
       }
-    })
+    }
+    
+    // 使用setTimeout延迟确保DOM完全渲染
+    const timer = setTimeout(scrollToBottom, 100)
+    return () => clearTimeout(timer)
   }, [messages, toolCalls, isThinking])
 
   const handleStop = () => {
@@ -239,13 +252,13 @@ export function ChatInterface() {
   }
 
   return (
-    <div className="flex-1 flex flex-col h-screen">
-      <div className="border-b border-border p-4 bg-card">
+    <div className="flex flex-col h-screen">
+      <div className="border-b border-border p-4 bg-card flex-shrink-0">
         <h2 className="text-lg font-semibold text-card-foreground">Chat Assistant</h2>
         <p className="text-sm text-muted-foreground">Ask me anything about your AI agents</p>
       </div>
 
-      <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
+      <ScrollArea className="flex-1 p-4 overflow-hidden" ref={scrollAreaRef}>
         <div className="max-w-4xl mx-auto space-y-4">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full text-center">
@@ -277,7 +290,7 @@ export function ChatInterface() {
         </div>
       </ScrollArea>
 
-      <div className="border-t border-border p-4 bg-card">
+      <div className="border-t border-border p-4 bg-card flex-shrink-0">
         <div className="max-w-4xl mx-auto space-y-2">
           {/* 文件附件预览 - 类似 Cursor 的简洁设计 */}
           {uploadedFiles.length > 0 && (
