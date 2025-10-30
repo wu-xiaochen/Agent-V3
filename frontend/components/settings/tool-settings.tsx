@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
@@ -24,115 +24,139 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Settings, ChevronRight } from "lucide-react"
+import { Settings, ChevronRight, RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-
-interface Tool {
-  id: string
-  name: string
-  description: string
-  enabled: boolean
-  mode: "API" | "MCP"
-  config: {
-    endpoint?: string
-    timeout?: number
-    retries?: number
-    [key: string]: any
-  }
-}
-
-const DEFAULT_TOOLS: Tool[] = [
-  {
-    id: "time",
-    name: "Time Tool",
-    description: "Get current date and time in various timezones",
-    enabled: true,
-    mode: "API",
-    config: {
-      timeout: 5000,
-      retries: 3
-    }
-  },
-  {
-    id: "calculator",
-    name: "Calculator",
-    description: "Perform mathematical calculations",
-    enabled: true,
-    mode: "API",
-    config: {
-      timeout: 3000,
-      retries: 2
-    }
-  },
-  {
-    id: "search",
-    name: "Web Search",
-    description: "Search the web for information",
-    enabled: false,
-    mode: "API",
-    config: {
-      endpoint: "https://api.search.com",
-      timeout: 10000,
-      retries: 3
-    }
-  },
-  {
-    id: "document_generator",
-    name: "Document Generator",
-    description: "Generate various types of documents",
-    enabled: true,
-    mode: "API",
-    config: {
-      timeout: 30000,
-      retries: 2
-    }
-  },
-  {
-    id: "crewai_generator",
-    name: "CrewAI Generator",
-    description: "Generate CrewAI team configurations",
-    enabled: true,
-    mode: "API",
-    config: {
-      timeout: 60000,
-      retries: 1
-    }
-  },
-]
+import { toolsApi, type ToolConfig, type ToolConfigUpdate } from "@/lib/api/tools"
 
 export function ToolSettings() {
-  const [tools, setTools] = useState<Tool[]>(DEFAULT_TOOLS)
-  const [editingTool, setEditingTool] = useState<Tool | null>(null)
+  const [tools, setTools] = useState<ToolConfig[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editingTool, setEditingTool] = useState<ToolConfig | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const { toast } = useToast()
 
-  const handleToggle = (toolId: string) => {
-    setTools(tools.map(t => 
-      t.id === toolId ? { ...t, enabled: !t.enabled } : t
-    ))
-    const tool = tools.find(t => t.id === toolId)
-    toast({ 
-      title: tool?.enabled ? "Tool disabled" : "Tool enabled",
-      description: tool?.name 
-    })
+  // 加载工具配置
+  useEffect(() => {
+    loadTools()
+  }, [])
+
+  const loadTools = async () => {
+    try {
+      setLoading(true)
+      const configs = await toolsApi.getAllConfigs()
+      setTools(configs)
+    } catch (error) {
+      console.error('Failed to load tools:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load tool configurations",
+        variant: "destructive"
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleSaveConfig = (updatedTool: Tool) => {
-    setTools(tools.map(t => t.id === updatedTool.id ? updatedTool : t))
-    setIsDialogOpen(false)
-    setEditingTool(null)
-    toast({ title: "Configuration saved", description: updatedTool.name })
+  const handleToggle = async (toolId: string) => {
+    const tool = tools.find(t => t.tool_id === toolId)
+    if (!tool) return
+
+    try {
+      const updated = await toolsApi.updateConfig(toolId, {
+        enabled: !tool.enabled
+      })
+      
+      setTools(tools.map(t => 
+        t.tool_id === toolId ? updated : t
+      ))
+      
+      toast({ 
+        title: updated.enabled ? "Tool enabled" : "Tool disabled",
+        description: updated.name
+      })
+    } catch (error) {
+      console.error('Failed to toggle tool:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update tool",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const handleSaveConfig = async (updatedTool: ToolConfig) => {
+    try {
+      const update: ToolConfigUpdate = {
+        enabled: updatedTool.enabled,
+        mode: updatedTool.mode,
+        config: updatedTool.config,
+        description: updatedTool.description
+      }
+      
+      const result = await toolsApi.updateConfig(updatedTool.tool_id, update)
+      
+      setTools(tools.map(t => t.tool_id === result.tool_id ? result : t))
+      setIsDialogOpen(false)
+      setEditingTool(null)
+      
+      toast({ 
+        title: "Configuration saved", 
+        description: result.name 
+      })
+    } catch (error) {
+      console.error('Failed to save config:', error)
+      toast({
+        title: "Error",
+        description: "Failed to save configuration",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const handleReset = async () => {
+    try {
+      const configs = await toolsApi.resetToDefault()
+      setTools(configs)
+      toast({
+        title: "Reset successful",
+        description: "Tool configurations reset to default"
+      })
+    } catch (error) {
+      console.error('Failed to reset:', error)
+      toast({
+        title: "Error",
+        description: "Failed to reset configurations",
+        variant: "destructive"
+      })
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">Loading tool configurations...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Enable/disable tools and configure their parameters
-      </p>
+      <div className="flex justify-between items-center">
+        <p className="text-sm text-muted-foreground">
+          Enable/disable tools and configure their parameters
+        </p>
+        <Button variant="outline" size="sm" onClick={handleReset}>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Reset to Default
+        </Button>
+      </div>
       
       <div className="space-y-3">
         {tools.map(tool => (
-          <Card key={tool.id} className="p-4">
+          <Card key={tool.tool_id} className="p-4">
             <div className="flex items-center justify-between gap-4">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
@@ -156,7 +180,7 @@ export function ToolSettings() {
               </div>
               
               <div className="flex items-center gap-2">
-                <Dialog open={isDialogOpen && editingTool?.id === tool.id} onOpenChange={setIsDialogOpen}>
+                <Dialog open={isDialogOpen && editingTool?.tool_id === tool.tool_id} onOpenChange={setIsDialogOpen}>
                   <DialogTrigger asChild>
                     <Button
                       variant="ghost"
@@ -170,20 +194,22 @@ export function ToolSettings() {
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-[500px]">
-                    <ToolConfigForm
-                      tool={editingTool!}
-                      onSave={handleSaveConfig}
-                      onCancel={() => {
-                        setIsDialogOpen(false)
-                        setEditingTool(null)
-                      }}
-                    />
+                    {editingTool && (
+                      <ToolConfigForm
+                        tool={editingTool}
+                        onSave={handleSaveConfig}
+                        onCancel={() => {
+                          setIsDialogOpen(false)
+                          setEditingTool(null)
+                        }}
+                      />
+                    )}
                   </DialogContent>
                 </Dialog>
                 
                 <Switch 
                   checked={tool.enabled} 
-                  onCheckedChange={() => handleToggle(tool.id)}
+                  onCheckedChange={() => handleToggle(tool.tool_id)}
                 />
               </div>
             </div>
@@ -199,11 +225,11 @@ function ToolConfigForm({
   onSave,
   onCancel,
 }: {
-  tool: Tool
-  onSave: (tool: Tool) => void
+  tool: ToolConfig
+  onSave: (tool: ToolConfig) => void
   onCancel: () => void
 }) {
-  const [formData, setFormData] = useState<Tool>(tool)
+  const [formData, setFormData] = useState<ToolConfig>(tool)
 
   const handleConfigChange = (key: string, value: any) => {
     setFormData({
