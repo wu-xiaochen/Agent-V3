@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X } from "lucide-react"
+import { X, Search, Plus, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,6 +10,10 @@ import { Switch } from "@/components/ui/switch"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
+import { api } from "@/lib/api"
+import type { ToolInfo } from "@/lib/api/tools"
 
 interface AgentConfig {
   id: string
@@ -33,22 +37,46 @@ interface AgentConfigPanelProps {
 export function AgentConfigPanel({ agent, onSave, onClose }: AgentConfigPanelProps) {
   const [formData, setFormData] = useState<AgentConfig>(agent)
   const [newTool, setNewTool] = useState("")
+  const [availableTools, setAvailableTools] = useState<ToolInfo[]>([])
+  const [loadingTools, setLoadingTools] = useState(false)
+  const [toolSelectorOpen, setToolSelectorOpen] = useState(false)
 
   useEffect(() => {
     setFormData(agent)
   }, [agent])
 
+  // 🆕 加载可用工具列表
+  useEffect(() => {
+    const loadTools = async () => {
+      try {
+        setLoadingTools(true)
+        const response = await api.toolsList.getEnabled()
+        if (response.success) {
+          setAvailableTools(response.tools)
+          console.log(`✅ 加载了 ${response.tools.length} 个可用工具`)
+        }
+      } catch (error) {
+        console.error('❌ 加载工具列表失败:', error)
+      } finally {
+        setLoadingTools(false)
+      }
+    }
+    loadTools()
+  }, [])
+
   const handleChange = (field: keyof AgentConfig, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  const handleAddTool = () => {
-    if (newTool.trim() && !formData.tools?.includes(newTool.trim())) {
+  const handleAddTool = (toolName?: string) => {
+    const tool = toolName || newTool.trim()
+    if (tool && !formData.tools?.includes(tool)) {
       setFormData(prev => ({
         ...prev,
-        tools: [...(prev.tools || []), newTool.trim()]
+        tools: [...(prev.tools || []), tool]
       }))
       setNewTool("")
+      setToolSelectorOpen(false)
     }
   }
 
@@ -133,31 +161,100 @@ export function AgentConfigPanel({ agent, onSave, onClose }: AgentConfigPanelPro
 
           {/* Tools */}
           <div className="space-y-3">
-            <Label>Tools</Label>
+            <div className="flex items-center justify-between">
+              <Label>Tools</Label>
+              {loadingTools && (
+                <span className="text-xs text-muted-foreground">Loading...</span>
+              )}
+            </div>
+            
+            {/* 🆕 工具选择器（从后端加载） */}
+            <Popover open={toolSelectorOpen} onOpenChange={setToolSelectorOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  disabled={loadingTools}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  {loadingTools ? "Loading tools..." : "Select from available tools"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[350px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search tools..." />
+                  <CommandEmpty>No tools found.</CommandEmpty>
+                  <CommandGroup>
+                    <ScrollArea className="h-[200px]">
+                      {availableTools
+                        .filter(tool => !formData.tools?.includes(tool.name))
+                        .map((tool) => (
+                          <CommandItem
+                            key={tool.name}
+                            value={tool.name}
+                            onSelect={() => handleAddTool(tool.name)}
+                            className="cursor-pointer"
+                          >
+                            <Check
+                              className={`mr-2 h-4 w-4 ${
+                                formData.tools?.includes(tool.name)
+                                  ? "opacity-100"
+                                  : "opacity-0"
+                              }`}
+                            />
+                            <div className="flex-1">
+                              <div className="font-medium">{tool.display_name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {tool.description}
+                              </div>
+                            </div>
+                            <Badge variant="outline" className="ml-2 text-xs">
+                              {tool.type}
+                            </Badge>
+                          </CommandItem>
+                        ))}
+                    </ScrollArea>
+                  </CommandGroup>
+                </Command>
+              </PopoverContent>
+            </Popover>
+
+            {/* 手动输入（备用方案） */}
             <div className="flex gap-2">
               <Input
                 value={newTool}
                 onChange={(e) => setNewTool(e.target.value)}
                 onKeyPress={(e) => e.key === "Enter" && handleAddTool()}
-                placeholder="Add tool name..."
+                placeholder="Or type custom tool name..."
+                className="text-sm"
               />
-              <Button onClick={handleAddTool} size="sm">
+              <Button onClick={() => handleAddTool()} size="sm" variant="secondary">
                 Add
               </Button>
             </div>
+            
+            {/* 已选工具列表 */}
             {formData.tools && formData.tools.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {formData.tools.map(tool => (
-                  <Badge
-                    key={tool}
-                    variant="secondary"
-                    className="cursor-pointer"
-                    onClick={() => handleRemoveTool(tool)}
-                  >
-                    {tool}
-                    <X className="ml-1 h-3 w-3" />
-                  </Badge>
-                ))}
+              <div className="space-y-2">
+                <div className="text-sm text-muted-foreground">
+                  Selected tools ({formData.tools.length}):
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {formData.tools.map(toolName => {
+                    const toolInfo = availableTools.find(t => t.name === toolName)
+                    return (
+                      <Badge
+                        key={toolName}
+                        variant="secondary"
+                        className="cursor-pointer hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                        onClick={() => handleRemoveTool(toolName)}
+                      >
+                        {toolInfo?.display_name || toolName}
+                        <X className="ml-1 h-3 w-3" />
+                      </Badge>
+                    )
+                  })}
+                </div>
               </div>
             )}
           </div>
