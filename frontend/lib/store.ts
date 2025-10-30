@@ -21,6 +21,7 @@ interface AppState {
   setCurrentTool: (tool: ToolType | null) => void
   setActiveTab: (tab: string) => void
   toggleDarkMode: () => void
+  setDarkMode: (dark: boolean) => void  // 🆕 直接设置主题
   createNewSession: () => void
   setSessionTitleGenerated: (generated: boolean) => void
 }
@@ -40,7 +41,7 @@ export const useAppStore = create<AppState>((set) => ({
   crewDrawerOpen: false,  // 🆕 默认关闭
   currentTool: null,
   activeTab: "crewai",
-  darkMode: true,
+  darkMode: typeof window !== 'undefined' ? localStorage.getItem('theme') !== 'light' : true,  // 🆕 从localStorage加载
   sessionTitleGenerated: false,
 
   setCurrentSession: (sessionId) => set((state) => {
@@ -110,7 +111,20 @@ export const useAppStore = create<AppState>((set) => ({
 
   setActiveTab: (tab) => set({ activeTab: tab }),
 
-  toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
+  toggleDarkMode: () => set((state) => {
+    const newDarkMode = !state.darkMode
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('theme', newDarkMode ? 'dark' : 'light')
+    }
+    return { darkMode: newDarkMode }
+  }),
+
+  setDarkMode: (dark) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('theme', dark ? 'dark' : 'light')
+    }
+    set({ darkMode: dark })
+  },  // 🆕 直接设置主题并持久化
 
   setSessionTitleGenerated: (generated) => set({ sessionTitleGenerated: generated }),
 
