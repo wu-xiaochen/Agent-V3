@@ -1328,6 +1328,208 @@ async def reset_tool_configs():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== Agent配置管理 API ====================
+
+@app.get("/api/agents")
+async def get_agent_configs():
+    """
+    获取所有Agent配置
+    
+    Returns:
+        Agent配置列表
+    """
+    try:
+        from src.services.agent_config_service import get_agent_config_service
+        
+        service = get_agent_config_service()
+        configs = service.get_all_configs()
+        
+        return {
+            "success": True,
+            "agents": [config.model_dump(mode='json') for config in configs],
+            "total": len(configs)
+        }
+    except Exception as e:
+        logger.error(f"Failed to get agent configs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/agents/{agent_id}")
+async def get_agent_config(agent_id: str):
+    """
+    获取单个Agent配置
+    
+    Args:
+        agent_id: Agent ID
+        
+    Returns:
+        Agent配置
+    """
+    try:
+        from src.services.agent_config_service import get_agent_config_service
+        
+        service = get_agent_config_service()
+        config = service.get_config(agent_id)
+        
+        if not config:
+            raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+        
+        return {
+            "success": True,
+            "agent": config.model_dump(mode='json')
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get agent config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agents")
+async def create_agent_config(create_data: Dict[str, Any]):
+    """
+    创建Agent配置
+    
+    Args:
+        create_data: Agent创建数据
+        
+    Returns:
+        创建的Agent配置
+    """
+    try:
+        from src.services.agent_config_service import get_agent_config_service
+        from src.models.agent_config import AgentConfigCreate
+        
+        service = get_agent_config_service()
+        
+        # 创建配置对象
+        config_create = AgentConfigCreate(**create_data)
+        
+        # 创建Agent
+        new_config = service.create_config(config_create)
+        
+        logger.info(f"Created agent: {new_config.id}")
+        
+        return {
+            "success": True,
+            "message": f"Agent {new_config.name} created successfully",
+            "agent": new_config.model_dump(mode='json')
+        }
+    except Exception as e:
+        logger.error(f"Failed to create agent: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/agents/{agent_id}")
+async def update_agent_config(agent_id: str, update_data: Dict[str, Any]):
+    """
+    更新Agent配置
+    
+    Args:
+        agent_id: Agent ID
+        update_data: 更新数据
+        
+    Returns:
+        更新后的Agent配置
+    """
+    try:
+        from src.services.agent_config_service import get_agent_config_service
+        from src.models.agent_config import AgentConfigUpdate
+        
+        service = get_agent_config_service()
+        
+        # 验证Agent是否存在
+        if not service.get_config(agent_id):
+            raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+        
+        # 创建更新对象
+        config_update = AgentConfigUpdate(**update_data)
+        
+        # 更新配置
+        updated_config = service.update_config(agent_id, config_update)
+        
+        if not updated_config:
+            raise HTTPException(status_code=500, detail="Failed to update agent config")
+        
+        logger.info(f"Updated agent: {agent_id}")
+        
+        return {
+            "success": True,
+            "message": f"Agent {agent_id} updated successfully",
+            "agent": updated_config.model_dump(mode='json')
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update agent: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/agents/{agent_id}")
+async def delete_agent_config(agent_id: str):
+    """
+    删除Agent配置
+    
+    Args:
+        agent_id: Agent ID
+        
+    Returns:
+        删除结果
+    """
+    try:
+        from src.services.agent_config_service import get_agent_config_service
+        
+        service = get_agent_config_service()
+        
+        # 删除配置
+        success = service.delete_config(agent_id)
+        
+        if not success:
+            raise HTTPException(
+                status_code=400, 
+                detail="Cannot delete agent (not found or last agent)"
+            )
+        
+        logger.info(f"Deleted agent: {agent_id}")
+        
+        return {
+            "success": True,
+            "message": f"Agent {agent_id} deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete agent: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agents/reset")
+async def reset_agent_configs():
+    """
+    重置Agent配置为默认值
+    
+    Returns:
+        默认Agent配置列表
+    """
+    try:
+        from src.services.agent_config_service import get_agent_config_service
+        
+        service = get_agent_config_service()
+        configs = service.reset_to_default()
+        
+        logger.info("Reset agent configs to default")
+        
+        return {
+            "success": True,
+            "message": "Agent configs reset to default",
+            "agents": [config.model_dump(mode='json') for config in configs],
+            "total": len(configs)
+        }
+    except Exception as e:
+        logger.error(f"Failed to reset agent configs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== 主入口 ====================
 
 if __name__ == "__main__":
