@@ -18,8 +18,13 @@ interface Session {
   is_local: boolean  // 标记是否为本地创建（未同步到后端）
 }
 
-export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false)
+interface SidebarProps {
+  collapsed?: boolean  // 🆕 可选的外部控制collapsed状态
+}
+
+export function Sidebar({ collapsed: externalCollapsed }: SidebarProps = {}) {
+  const [internalCollapsed, setInternalCollapsed] = useState(false)
+  const collapsed = externalCollapsed !== undefined ? externalCollapsed : internalCollapsed
   const [sessions, setSessions] = useState<Session[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const { currentSession, setCurrentSession, clearMessages, setToolPanelOpen, setActiveTab, messages, sessionTitleGenerated, setSessionTitleGenerated } = useAppStore()
@@ -256,7 +261,8 @@ export function Sidebar() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={() => externalCollapsed === undefined && setInternalCollapsed(!collapsed)}
+          disabled={externalCollapsed !== undefined}  // 外部控制时禁用按钮
           className="text-sidebar-foreground"
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}

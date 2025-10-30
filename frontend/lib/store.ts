@@ -6,6 +6,7 @@ interface AppState {
   messages: Message[]
   sessions: ChatSession[]
   toolPanelOpen: boolean
+  crewDrawerOpen: boolean  // 🆕 Crew画布开关
   currentTool: ToolType | null
   activeTab: string
   darkMode: boolean
@@ -16,6 +17,7 @@ interface AppState {
   updateMessage: (id: string, updates: Partial<Message>) => void
   clearMessages: () => void
   setToolPanelOpen: (open: boolean) => void
+  setCrewDrawerOpen: (open: boolean) => void  // 🆕 设置Crew画布开关
   setCurrentTool: (tool: ToolType | null) => void
   setActiveTab: (tab: string) => void
   toggleDarkMode: () => void
@@ -35,6 +37,7 @@ export const useAppStore = create<AppState>((set) => ({
     },
   ],
   toolPanelOpen: false,
+  crewDrawerOpen: false,  // 🆕 默认关闭
   currentTool: null,
   activeTab: "crewai",
   darkMode: true,
@@ -100,6 +103,8 @@ export const useAppStore = create<AppState>((set) => ({
   clearMessages: () => set({ messages: [], sessionTitleGenerated: false }),
 
   setToolPanelOpen: (open) => set({ toolPanelOpen: open }),
+
+  setCrewDrawerOpen: (open) => set({ crewDrawerOpen: open }),  // 🆕 Crew画布开关
 
   setCurrentTool: (tool) => set({ currentTool: tool }),
 

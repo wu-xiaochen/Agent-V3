@@ -147,10 +147,9 @@ export function ChatInterface() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const { messages, addMessage, currentSession } = useAppStore()
+  const { messages, addMessage, currentSession, crewDrawerOpen, setCrewDrawerOpen } = useAppStore()
   
-  // 🆕 CrewAI画布状态
-  const [crewDrawerOpen, setCrewDrawerOpen] = useState(false)
+  // 🆕 CrewAI画布状态（pendingCrewConfig保留为局部状态）
   const [pendingCrewConfig, setPendingCrewConfig] = useState<any | null>(null)
 
   // 🆕 组件挂载时初始化默认session
