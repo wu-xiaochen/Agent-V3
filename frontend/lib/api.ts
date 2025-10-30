@@ -495,6 +495,8 @@ export const healthAPI = {
 import { systemApi } from './api/system'
 // 导入工具列表API
 import { toolsListApi } from './api/tools'
+// 导入知识库API
+import { knowledgeBaseApi } from './api/knowledge-base'
 
 export const api = {
   chat: chatAPI,
@@ -506,6 +508,7 @@ export const api = {
   health: healthAPI,
   system: systemApi,  // 🆕 系统配置API
   toolsList: toolsListApi,  // 🆕 工具列表API（用于CrewAI）
+  knowledgeBase: knowledgeBaseApi,  // 🆕 知识库API
 }
 
 export default api

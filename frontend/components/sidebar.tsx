@@ -377,17 +377,15 @@ export function Sidebar({ collapsed: externalCollapsed }: SidebarProps = {}) {
           <>
             <div className="text-xs font-medium text-sidebar-muted-foreground px-2 py-2 mt-6">Quick Access</div>
             <div className="space-y-1">
-              <Button 
-                variant="ghost" 
-                className="w-full justify-start text-sidebar-foreground"
-                onClick={() => {
-                  setActiveTab("knowledge")
-                  setToolPanelOpen(true)
-                }}
-              >
-                <Database className="h-4 w-4" />
-                <span className="ml-2 text-sm">Knowledge Bases</span>
-              </Button>
+              <Link href="/knowledge" className="w-full">
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start text-sidebar-foreground"
+                >
+                  <Database className="h-4 w-4" />
+                  {!collapsed && <span className="ml-2 text-sm">Knowledge Bases</span>}
+                </Button>
+              </Link>
               <Button 
                 variant="ghost" 
                 className="w-full justify-start text-sidebar-foreground"
