@@ -255,7 +255,12 @@ export function ChatInterface() {
   }
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading) return
+    if (!input.trim() || isLoading) {
+      console.log("⚠️ 跳过发送:", { isEmpty: !input.trim(), isLoading })
+      return
+    }
+    
+    console.log("🚀 [handleSend] 开始发送消息:", input.substring(0, 50))
 
     // ✅ 修复：构建包含文档附件的消息
     const attachments = uploadedFiles
@@ -339,24 +344,44 @@ export function ChatInterface() {
                 step => step.type === 'observation' && 
                         step.step > 0 && 
                         step.content && 
-                        (step.content.includes('action') || step.content.includes('crew_config'))
+                        (typeof step.content === 'string' && 
+                         (step.content.includes('action') || step.content.includes('crew_config') || step.content.includes('agents')))
               )
               
               if (crewObservation && !crewDrawerOpen) {
                 console.log("🎨 检测到crew生成完成，解析配置并打开画布")
+                console.log("📦 observation内容:", crewObservation.content)
+                
                 try {
-                  // 尝试从observation中提取crew_config
-                  const observationContent = typeof crewObservation.content === 'string' 
-                    ? JSON.parse(crewObservation.content) 
-                    : crewObservation.content
+                  let crewConfig = null
                   
-                  if (observationContent.crew_config) {
-                    console.log("📦 找到crew_config:", observationContent.crew_config)
-                    setPendingCrewConfig(observationContent.crew_config)
+                  // 尝试多种解析方式
+                  if (typeof crewObservation.content === 'string') {
+                    const parsed = JSON.parse(crewObservation.content)
+                    console.log("✅ JSON解析成功:", parsed)
+                    
+                    // 尝试多个可能的字段
+                    crewConfig = parsed.crew_config || parsed.config || parsed
+                  } else if (typeof crewObservation.content === 'object') {
+                    crewConfig = crewObservation.content.crew_config || crewObservation.content
+                  }
+                  
+                  // 验证crew_config是否有效
+                  if (crewConfig && (crewConfig.agents || crewConfig.tasks)) {
+                    console.log("✅ 成功提取crew配置:", {
+                      id: crewConfig.id,
+                      name: crewConfig.name,
+                      agentsCount: crewConfig.agents?.length || 0,
+                      tasksCount: crewConfig.tasks?.length || 0
+                    })
+                    setPendingCrewConfig(crewConfig)
                     setCrewDrawerOpen(true)
+                  } else {
+                    console.warn("⚠️ crew配置无效:", crewConfig)
                   }
                 } catch (e) {
-                  console.warn("⚠️ 解析observation失败:", e)
+                  console.error("❌ 解析observation失败:", e)
+                  console.log("原始内容:", crewObservation.content)
                 }
               }
               
@@ -499,10 +524,21 @@ export function ChatInterface() {
         })
         
         if (finalToolSteps.length > 0) {
-          setMessageThinkingChains(prev => ({
-            ...prev,
-            [currentMessageId]: finalToolSteps
-          }))
+          console.log("💾 准备保存思维链到state和localStorage:", {
+            messageId: currentMessageId,
+            stepsCount: finalToolSteps.length,
+            steps: finalToolSteps
+          })
+          
+          // 保存到state
+          setMessageThinkingChains(prev => {
+            const updated = {
+              ...prev,
+              [currentMessageId]: finalToolSteps
+            }
+            console.log("📝 更新messageThinkingChains state:", Object.keys(updated).length, "条消息")
+            return updated
+          })
           
           // 🆕 同时保存到localStorage
           const savedChains = localStorage.getItem(`thinking_chains_${currentSession}`) || '{}'
@@ -510,8 +546,12 @@ export function ChatInterface() {
           parsedChains[currentMessageId] = finalToolSteps
           localStorage.setItem(`thinking_chains_${currentSession}`, JSON.stringify(parsedChains))
           console.log(`✅ 保存思维链记录成功: ${currentMessageId} - ${finalToolSteps.length} 个步骤`)
+          console.log("📦 localStorage内容:", parsedChains)
         } else {
-          console.warn("⚠️ 思维链为空，不保存")
+          console.warn("⚠️ 思维链为空，不保存", {
+            messageId: currentMessageId,
+            thinkingChainLength: thinkingChain.length
+          })
         }
         
         const aiMessage = {
@@ -631,16 +671,17 @@ export function ChatInterface() {
                 const hasChain = messageChain.length > 0
                 const shouldShowThinking = message.role === "user" && index === messages.length - 1 && isThinking
                 
-                // 🔍 调试日志
-                if (message.role === "user") {
-                  console.log(`📝 消息 ${message.id}:`, {
+                // 🔍 调试日志（只在有变化时打印）
+                if (message.role === "user" && (hasChain || shouldShowThinking)) {
+                  console.log(`📝 [渲染] 消息 ${message.id}:`, {
                     content: message.content.substring(0, 30),
                     isLastMessage: index === messages.length - 1,
                     isThinking,
                     hasChain,
                     shouldShowThinking,
-                    messageChain,
-                    currentThinkingChain: thinkingChain
+                    messageChainLength: messageChain.length,
+                    messageChain: messageChain,
+                    allChainKeys: Object.keys(messageThinkingChains)
                   })
                 }
                 
