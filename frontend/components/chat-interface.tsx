@@ -357,12 +357,28 @@ export function ChatInterface() {
                   
                   // 尝试多种解析方式
                   if (typeof crewObservation.content === 'string') {
-                    const parsed = JSON.parse(crewObservation.content)
-                    console.log("✅ JSON解析成功:", parsed)
+                    // 先清理可能的非法字符
+                    let cleanContent = crewObservation.content.trim()
                     
-                    // 尝试多个可能的字段
-                    crewConfig = parsed.crew_config || parsed.config || parsed
+                    // 跳过明显不是JSON的内容
+                    if (!cleanContent.startsWith('{') && !cleanContent.startsWith('[')) {
+                      console.warn("⚠️ observation内容不是JSON格式:", cleanContent.substring(0, 100))
+                      return
+                    }
+                    
+                    try {
+                      const parsed = JSON.parse(cleanContent)
+                      console.log("✅ JSON解析成功:", parsed)
+                      
+                      // 尝试多个可能的字段
+                      crewConfig = parsed.crew_config || parsed.config || parsed
+                    } catch (parseError) {
+                      console.error("❌ JSON解析失败:", parseError)
+                      console.log("尝试解析的内容:", cleanContent.substring(0, 200))
+                      return
+                    }
                   } else if (typeof crewObservation.content === 'object') {
+                    console.log("✅ observation是对象，直接提取")
                     crewConfig = crewObservation.content.crew_config || crewObservation.content
                   }
                   
@@ -377,11 +393,11 @@ export function ChatInterface() {
                     setPendingCrewConfig(crewConfig)
                     setCrewDrawerOpen(true)
                   } else {
-                    console.warn("⚠️ crew配置无效:", crewConfig)
+                    console.warn("⚠️ crew配置无效或不完整:", crewConfig)
                   }
                 } catch (e) {
-                  console.error("❌ 解析observation失败:", e)
-                  console.log("原始内容:", crewObservation.content)
+                  console.error("❌ 处理observation时发生错误:", e)
+                  console.log("完整的observation:", crewObservation)
                 }
               }
               

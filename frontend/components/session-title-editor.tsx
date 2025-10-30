@@ -82,20 +82,15 @@ export function SessionTitleEditor({
   }
 
   return (
-    <div className={cn("flex items-center gap-2 group/title", className)}>
-      <p className="text-sm truncate flex-1">{title}</p>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-6 w-6 shrink-0 opacity-0 group-hover/title:opacity-100 transition-opacity"
-        onClick={(e) => {
-          e.stopPropagation()
-          setIsEditing(true)
-        }}
-      >
-        <Edit2 className="h-3 w-3" />
-      </Button>
-    </div>
+    <p 
+      className={cn("text-sm truncate", className)}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        setIsEditing(true)
+      }}
+    >
+      {title}
+    </p>
   )
 }
 
