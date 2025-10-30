@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { MessageSquare, Plus, Database, Users, Settings, ChevronLeft, ChevronRight, Trash2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -377,17 +378,15 @@ export function Sidebar() {
 
       {/* 底部设置按钮 */}
       <div className="p-3 border-t border-sidebar-border">
-        <Button 
-          variant="ghost" 
-          className="w-full justify-start text-sidebar-foreground"
-          onClick={() => {
-            setActiveTab("settings")
-            setToolPanelOpen(true)
-          }}
-        >
-          <Settings className="h-4 w-4" />
-          {!collapsed && <span className="ml-2 text-sm">Settings</span>}
-        </Button>
+        <Link href="/settings" className="w-full">
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start text-sidebar-foreground"
+          >
+            <Settings className="h-4 w-4" />
+            {!collapsed && <span className="ml-2 text-sm">Settings</span>}
+          </Button>
+        </Link>
       </div>
     </div>
   )
