@@ -258,6 +258,16 @@ export function ChatInterface() {
     const messageContent = input
     const requestSessionId = currentSession || "default"
     const currentMessageId = userMessage.id  // 🆕 保存当前消息ID
+    
+    // 🆕 立即保存会话（用户输入后马上保存）
+    const sessionData = {
+      sessionId: requestSessionId,
+      messages: [...messages, userMessage],
+      timestamp: new Date().toISOString()
+    }
+    localStorage.setItem(`session_${requestSessionId}`, JSON.stringify(sessionData))
+    console.log(`💾 用户输入后立即保存会话: ${requestSessionId}`)
+    
     setInput("")
     setIsLoading(true)
     setIsThinking(true)
@@ -281,7 +291,7 @@ export function ChatInterface() {
       // 🆕 清空后端的思维链历史（开始新对话）
       await api.thinking.clearThinkingChain(requestSessionId)
       
-      // 🆕 开始轮询思维链历史
+      // 🆕 开始轮询思维链历史（200ms快速轮询，实时显示）
       pollInterval = setInterval(async () => {
         try {
           pollCount++
@@ -345,7 +355,7 @@ export function ChatInterface() {
         } catch (pollError) {
           console.error("轮询思维链失败:", pollError)
         }
-      }, 500)
+      }, 200)  // ← 200ms快速轮询，实时显示
       
       // ✅ 修复：调用API时携带附件信息
       console.log("🚀 Sending message:", {
@@ -455,14 +465,27 @@ export function ChatInterface() {
         addMessage(aiMessage)
         
         // 🆕 检查是否需要自动打开CrewAI画布
+        console.log("🔍 检查metadata:", {
+          hasMetadata: !!response.metadata,
+          action: response.metadata?.action,
+          fullMetadata: response.metadata
+        })
+        
         if (response.metadata && response.metadata.action === "open_canvas") {
           console.log("🎨 检测到CrewAI生成，准备自动打开画布", response.metadata)
+          console.log("📦 Crew配置:", response.metadata.crew_config)
+          
           // 保存待加载的Crew配置
           setPendingCrewConfig(response.metadata.crew_config)
+          console.log("✅ pendingCrewConfig已设置")
+          
           // 延迟打开画布（让用户看到消息后再打开）
           setTimeout(() => {
+            console.log("🚀 延迟执行：打开CrewAI画布")
             setCrewDrawerOpen(true)
           }, 1500)
+        } else {
+          console.log("⚠️ 未检测到open_canvas action")
         }
       } else {
         setIsThinking(false)

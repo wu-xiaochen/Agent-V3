@@ -221,6 +221,41 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
     // 执行真正的保存
     await handleSave()
   }
+  
+  // 🆕 删除Crew
+  const handleDeleteCrew = async (crewId: string) => {
+    if (!confirm("确定要删除这个Crew吗？")) {
+      return
+    }
+    
+    try {
+      setLoading(true)
+      const result = await api.crewai.deleteCrew(crewId)
+      if (result.success) {
+        toast({
+          title: "删除成功",
+          description: "Crew已删除",
+        })
+        // 刷新列表
+        await loadCrews()
+        // 如果删除的是当前选中的，清空选择
+        if (selectedCrew?.id === crewId) {
+          setSelectedCrew(null)
+          setCanvasNodes([])
+          setCanvasEdges([])
+        }
+      }
+    } catch (error) {
+      console.error("删除Crew失败:", error)
+      toast({
+        title: "删除失败",
+        description: "无法删除Crew，请稍后重试",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -262,12 +297,12 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
                   crews.map((crew) => (
                     <div
                       key={crew.id}
-                      className={`p-3 rounded-lg border cursor-pointer transition-all hover:border-primary ${
+                      className={`group relative p-3 rounded-lg border cursor-pointer transition-all hover:border-primary ${
                         selectedCrew?.id === crew.id ? "border-primary bg-accent" : ""
                       }`}
                       onClick={() => handleLoadCrew(crew.id)}
                     >
-                      <div className="font-semibold text-sm">{crew.name}</div>
+                      <div className="font-semibold text-sm pr-8">{crew.name}</div>
                       <div className="text-xs text-muted-foreground line-clamp-2">
                         {crew.description}
                       </div>
@@ -279,6 +314,18 @@ export function CrewDrawer({ open, onOpenChange, initialCrewConfig }: CrewDrawer
                           {crew.tasks.length} tasks
                         </Badge>
                       </div>
+                      {/* 🆕 删除按钮 */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteCrew(crew.id)
+                        }}
+                      >
+                        <X className="h-3 w-3 text-destructive" />
+                      </Button>
                     </div>
                   ))
                 )}
