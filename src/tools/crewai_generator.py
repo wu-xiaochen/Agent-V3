@@ -676,7 +676,7 @@ class CrewAIGeneratorTool(BaseTool):
     description: str = "根据业务需求生成CrewAI团队配置，支持多业务领域的专业团队创建"
     generator: CrewAIGenerator = Field(default_factory=CrewAIGenerator)
     auto_save: bool = Field(default=True, description="是否自动保存配置到文件")
-    save_dir: str = Field(default="config/generated", description="配置保存目录")
+    save_dir: str = Field(default="data/crews", description="配置保存目录")
     
     def _run(self, business_process: str, **kwargs) -> Dict[str, Any]:
         """
@@ -715,14 +715,18 @@ class CrewAIGeneratorTool(BaseTool):
             config_dict["config_id"] = crew_id
             logger.info(f"✅ CrewAI配置已保存: {saved_path} (ID: {config_dict['config_id']})")
         
+        # 🆕 同时保存为前端CrewAI API兼容的格式
+        frontend_crew_config = self._convert_to_frontend_format(standard_config, crew_id)
+        self._save_frontend_crew(frontend_crew_config, crew_id)
+        
         # 🆕 返回特殊标记，让前端自动打开画布
         result = {
             "success": True,
             "crew_id": crew_id,
             "crew_name": crew_name,
-            "crew_config": config_dict,
+            "crew_config": frontend_crew_config,  # 使用前端格式
             "action": "open_canvas",  # ← 前端识别此标记自动打开CrewAI画布
-            "message": f"✅ 已生成Crew团队: {crew_name}\n\n包含 {len(config_dict.get('crewai_config', {}).get('agents', []))} 个Agent和 {len(config_dict.get('crewai_config', {}).get('tasks', []))} 个Task\n\n点击右上角CrewAI按钮查看详情，或等待自动打开画布"
+            "message": f"✅ 已生成Crew团队: {crew_name}\n\n包含 {len(frontend_crew_config.get('agents', []))} 个Agent和 {len(frontend_crew_config.get('tasks', []))} 个Task\n\n点击右上角CrewAI按钮查看详情，或等待自动打开画布"
         }
         
         return result
@@ -779,6 +783,96 @@ class CrewAIGeneratorTool(BaseTool):
         timestamp = datetime.now().isoformat()
         id_string = f"{crew_name}_{timestamp}"
         return hashlib.md5(id_string.encode()).hexdigest()[:12]
+    
+    def _convert_to_frontend_format(self, standard_config: Any, crew_id: str) -> Dict[str, Any]:
+        """
+        转换为前端CrewAI格式
+        
+        Args:
+            standard_config: 标准化配置
+            crew_id: Crew ID
+            
+        Returns:
+            Dict: 前端格式的配置
+        """
+        from datetime import datetime
+        
+        crewai_config = standard_config.crewai_config
+        
+        # 转换Agents
+        agents = []
+        for agent in crewai_config.agents:
+            agents.append({
+                "id": f"agent_{agent.name}_{crew_id[:8]}",
+                "name": agent.name,
+                "role": agent.role,
+                "goal": agent.goal,
+                "backstory": agent.backstory,
+                "tools": agent.tools,
+                "llm": None,
+                "verbose": agent.verbose,
+                "allowDelegation": agent.allow_delegation,
+                "maxIter": agent.max_iter,
+                "maxRpm": agent.max_rpm
+            })
+        
+        # 转换Tasks
+        tasks = []
+        for task in crewai_config.tasks:
+            # 找到对应的agent id
+            agent_id = None
+            for agent in agents:
+                if agent["name"] == task.agent:
+                    agent_id = agent["id"]
+                    break
+            
+            tasks.append({
+                "id": f"task_{task.name}_{crew_id[:8]}",
+                "description": task.description,
+                "expectedOutput": task.expected_output,
+                "agent": agent_id or task.agent,
+                "dependencies": [],
+                "context": None,
+                "async": False,
+                "tools": []
+            })
+        
+        return {
+            "id": crew_id,
+            "name": crewai_config.name,
+            "description": crewai_config.description,
+            "agents": agents,
+            "tasks": tasks,
+            "process": crewai_config.process,
+            "verbose": crewai_config.verbose,
+            "memory": crewai_config.memory,
+            "embedder": None,
+            "createdAt": datetime.now().isoformat(),
+            "updatedAt": datetime.now().isoformat()
+        }
+    
+    def _save_frontend_crew(self, crew_config: Dict[str, Any], crew_id: str):
+        """
+        保存前端Crew配置到data/crews目录
+        
+        Args:
+            crew_config: Crew配置
+            crew_id: Crew ID
+        """
+        import os
+        import json
+        from pathlib import Path
+        
+        # 确保目录存在
+        crews_dir = Path("data/crews")
+        crews_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 保存文件
+        file_path = crews_dir / f"{crew_id}.json"
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(crew_config, f, ensure_ascii=False, indent=2)
+        
+        logger.info(f"✅ 前端Crew配置已保存: {file_path}")
     
     async def _arun(self, business_process: str, **kwargs) -> Dict[str, Any]:
         """异步运行CrewAI配置生成工具"""

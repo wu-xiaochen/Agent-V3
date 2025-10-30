@@ -521,6 +521,7 @@ export function ChatInterface() {
           <CrewDrawer 
             open={crewDrawerOpen} 
             onOpenChange={setCrewDrawerOpen}
+            initialCrewConfig={pendingCrewConfig}
           />
         </div>
       </div>
