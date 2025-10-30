@@ -150,6 +150,7 @@ export function ChatInterface() {
   const isThinking = currentThinkingState.isThinking
   const thinkingChain = currentThinkingState.thinkingChain
   const [messageThinkingChains, setMessageThinkingChains] = useState<Record<string, any[]>>({})  // 🆕 每条消息的思维链
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')  // 🆕 保存状态
   
   // 🆕 辅助函数：更新当前会话的思维状态
   const updateSessionThinking = (updates: { isThinking?: boolean; thinkingChain?: any[] }) => {
@@ -321,6 +322,13 @@ export function ChatInterface() {
       messagesCount: updatedMessages.length,
       lastMessage: messageContent.substring(0, 30)
     })
+    
+    // 🆕 显示保存状态
+    setSaveStatus('saving')
+    setTimeout(() => {
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 2000)  // 2秒后隐藏
+    }, 300)
     
     setInput("")
     setIsLoading(true)
@@ -669,8 +677,34 @@ export function ChatInterface() {
     <div className="flex-1 flex flex-col h-screen">
       <div className="border-b border-border p-4 bg-card flex-shrink-0 flex items-center justify-between">
         <div className="flex-1">
-          <h2 className="text-lg font-semibold text-card-foreground">Chat Assistant</h2>
-          <p className="text-sm text-muted-foreground">Ask me anything about your AI agents</p>
+          <div className="flex items-center gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-card-foreground">Chat Assistant</h2>
+              <p className="text-sm text-muted-foreground">Ask me anything about your AI agents</p>
+            </div>
+            {/* 🆕 保存状态指示器 */}
+            {saveStatus !== 'idle' && (
+              <div className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full transition-all ${
+                saveStatus === 'saving' 
+                  ? 'bg-blue-500/10 text-blue-600' 
+                  : 'bg-green-500/10 text-green-600'
+              }`}>
+                {saveStatus === 'saving' ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <span>Saved</span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <CrewDrawer 
