@@ -228,6 +228,18 @@ async def chat_message(request: ChatMessage):
                 if call_info.get("error"):
                     observation_data["error"] = call_info["error"]
                 
+                # 🔥 尝试解析output为JSON对象并添加到metadata
+                output_str = call_info.get("output", "")
+                if output_str and isinstance(output_str, str):
+                    try:
+                        import json
+                        parsed_output = json.loads(output_str)
+                        if isinstance(parsed_output, dict):
+                            observation_data["metadata"] = {"observation": parsed_output}
+                            logger.info("✅ 成功将observation对象添加到metadata")
+                    except (json.JSONDecodeError, ValueError):
+                        pass  # 不是JSON格式，保持原样
+                
                 session_thinking_chains[session_id].append(observation_data)
                 logger.debug(f"🧠 添加observation到思维链: Step {step_number}")
             
