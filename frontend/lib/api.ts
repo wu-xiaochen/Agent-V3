@@ -2,42 +2,13 @@
  * API 客户端 - 与后端 FastAPI 服务通信
  */
 
-import axios, { AxiosInstance, AxiosError } from "axios"
 import type { Message, FileAttachment, KnowledgeBase, Document } from "./types"
 
-// API 基础配置
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+// 从api-client导入以避免循环依赖
+import { apiClient } from "./api-client"
 
-// 创建 axios 实例并导出
-export const apiClient: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 300000, // 🆕 5分钟超时（CrewAI和复杂任务需要更长时间）
-  headers: {
-    "Content-Type": "application/json",
-  },
-})
-
-// 请求拦截器
-apiClient.interceptors.request.use(
-  (config) => {
-    // 可以在这里添加 token
-    // const token = localStorage.getItem("token")
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`
-    // }
-    return config
-  },
-  (error) => Promise.reject(error)
-)
-
-// 响应拦截器
-apiClient.interceptors.response.use(
-  (response) => response,
-  (error: AxiosError) => {
-    console.error("API Error:", error.response?.data || error.message)
-    return Promise.reject(error)
-  }
-)
+// 导出apiClient供其他模块使用
+export { apiClient }
 
 // ==================== 类型定义 ====================
 
@@ -151,7 +122,8 @@ export const chatAPI = {
     onMessage: (data: any) => void,
     onError: (error: any) => void
   ): WebSocket {
-    const wsUrl = API_BASE_URL.replace("http", "ws") + "/api/chat/stream"
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+    const wsUrl = baseUrl.replace("http", "ws") + "/api/chat/stream"
     const ws = new WebSocket(wsUrl)
 
     ws.onopen = () => {
@@ -291,7 +263,8 @@ export const filesAPI = {
    * 获取下载链接
    */
   getDownloadUrl(fileId: string): string {
-    return `${API_BASE_URL}/api/files/download/${fileId}`
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+    return `${baseUrl}/api/files/download/${fileId}`
   },
 }
 
@@ -493,10 +466,10 @@ export const healthAPI = {
 // 导出所有 API
 // 导入系统配置API
 import { systemApi } from './api/system'
-// 导入工具列表API
+// 导入工具列表API (用于CrewAI工具选择)
 import { toolsListApi } from './api/tools'
-// 导入知识库API
-import { knowledgeBaseApi } from './api/knowledge-base'
+// 导入知识库API (如果存在)
+// import { knowledgeBaseApi } from './api/knowledge-base'
 
 export const api = {
   chat: chatAPI,
@@ -508,7 +481,7 @@ export const api = {
   health: healthAPI,
   system: systemApi,  // 🆕 系统配置API
   toolsList: toolsListApi,  // 🆕 工具列表API（用于CrewAI）
-  knowledgeBase: knowledgeBaseApi,  // 🆕 知识库API
+  // knowledgeBase: knowledgeBaseApi,  // ⏳ 知识库API (待实现)
 }
 
 export default api

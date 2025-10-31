@@ -91,10 +91,15 @@ export async function verifyToast(page: Page, expectedMessage: string) {
  * 清空本地存储
  */
 export async function clearLocalStorage(page: Page) {
-  await page.evaluate(() => {
-    localStorage.clear();
-    sessionStorage.clear();
-  });
+  try {
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+  } catch (error) {
+    // 忽略安全错误（在某些环境下可能被阻止）
+    console.log('⚠️ 无法清空localStorage:', error);
+  }
 }
 
 /**
