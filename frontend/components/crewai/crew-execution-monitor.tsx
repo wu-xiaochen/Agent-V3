@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button"
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark, vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useAppStore } from "@/lib/store"
+import { useToast } from "@/hooks/use-toast"
+import { api } from "@/lib/api"
 import { 
   Play, 
   Pause, 
@@ -50,6 +52,7 @@ export function CrewExecutionMonitor({
   onError
 }: CrewExecutionMonitorProps) {
   const darkMode = useAppStore(state => state.darkMode)
+  const { toast } = useToast()
   const [isRunning, setIsRunning] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [executionId, setExecutionId] = useState<string | null>(null)
@@ -74,6 +77,20 @@ export function CrewExecutionMonitor({
   const filteredLogs = logFilter === 'all' 
     ? logs 
     : logs.filter(log => log.type === logFilter)
+  
+  // 🆕 日志按时间戳分组（按分钟分组）
+  const groupedLogs = (() => {
+    const groups: Record<string, ExecutionLog[]> = {}
+    filteredLogs.forEach(log => {
+      const date = new Date(log.timestamp)
+      const groupKey = `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`
+      if (!groups[groupKey]) {
+        groups[groupKey] = []
+      }
+      groups[groupKey].push(log)
+    })
+    return Object.entries(groups).map(([time, logs]) => ({ time, logs }))
+  })()
   
   const eventSourceRef = useRef<EventSource | null>(null)
   const logsEndRef = useRef<HTMLDivElement>(null)
@@ -227,11 +244,49 @@ export function CrewExecutionMonitor({
     }
   }
 
-  const handleStop = () => {
+  const handleStop = async () => {
+    if (executionId) {
+      try {
+        await api.crewai.cancelExecution(executionId)
+        addLog('warning', '执行已取消')
+      } catch (error: any) {
+        console.error('取消执行失败:', error)
+        addLog('error', `取消失败: ${error.message}`)
+      }
+    }
     eventSourceRef.current?.close()
     setIsRunning(false)
     setIsPaused(false)
-    addLog('warning', '执行已停止')
+  }
+  
+  const handlePause = async () => {
+    if (!executionId) return
+    
+    try {
+      const result = await api.crewai.pauseExecution(executionId)
+      if (result.success) {
+        setIsPaused(true)
+        addLog('info', '执行已暂停')
+      }
+    } catch (error: any) {
+      console.error('暂停执行失败:', error)
+      addLog('error', `暂停失败: ${error.message}`)
+    }
+  }
+  
+  const handleResume = async () => {
+    if (!executionId) return
+    
+    try {
+      const result = await api.crewai.resumeExecution(executionId)
+      if (result.success) {
+        setIsPaused(false)
+        addLog('info', '执行已恢复')
+      }
+    } catch (error: any) {
+      console.error('恢复执行失败:', error)
+      addLog('error', `恢复失败: ${error.message}`)
+    }
   }
 
   const handleExport = () => {
@@ -274,16 +329,29 @@ export function CrewExecutionMonitor({
               Start
             </Button>
           ) : (
-            <Button onClick={handleStop} size="sm" variant="destructive">
-              <Square className="h-4 w-4 mr-2" />
-              Stop
-            </Button>
+            <>
+              {!isPaused ? (
+                <Button onClick={handlePause} size="sm" variant="outline">
+                  <Pause className="h-4 w-4 mr-2" />
+                  Pause
+                </Button>
+              ) : (
+                <Button onClick={handleResume} size="sm" variant="outline">
+                  <Play className="h-4 w-4 mr-2" />
+                  Resume
+                </Button>
+              )}
+              <Button onClick={handleStop} size="sm" variant="destructive">
+                <Square className="h-4 w-4 mr-2" />
+                Stop
+              </Button>
+            </>
           )}
           
           {result && (
             <Button onClick={handleExport} size="sm" variant="outline">
               <Download className="h-4 w-4 mr-2" />
-              Export
+              Export JSON
             </Button>
           )}
         </div>
@@ -377,8 +445,8 @@ export function CrewExecutionMonitor({
         </div>
 
         <ScrollArea className="h-[300px] rounded-md border p-4">
-          <div className="space-y-2">
-            {filteredLogs.length === 0 ? (
+          <div className="space-y-4">
+            {groupedLogs.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
                 {logs.length === 0 
                   ? "No logs yet. Click Start to begin execution."
@@ -386,23 +454,42 @@ export function CrewExecutionMonitor({
                 }
               </p>
             ) : (
-              filteredLogs.map((log, index) => (
-                <div
-                  key={index}
-                  className={`flex gap-2 text-sm p-2 rounded hover:bg-muted/50 transition-colors ${
-                    log.type === 'error' ? 'text-destructive' :
-                    log.type === 'success' ? 'text-green-600' :
-                    log.type === 'warning' ? 'text-yellow-600' :
-                    'text-foreground'
-                  }`}
-                >
-                  <span className="text-muted-foreground text-xs font-mono shrink-0">
-                    {new Date(log.timestamp).toLocaleTimeString()}
-                  </span>
-                  <Badge variant="outline" className="shrink-0 h-5 text-xs">
-                    {log.type}
-                  </Badge>
-                  <span className="flex-1">{log.message}</span>
+              groupedLogs.map((group, groupIndex) => (
+                <div key={groupIndex} className="space-y-2 mb-4">
+                  {/* 🆕 时间分组标题 */}
+                  <div className="sticky top-0 bg-background/95 backdrop-blur-sm py-1 z-10">
+                    <div className="text-xs font-semibold text-muted-foreground border-b pb-1">
+                      {group.time}
+                    </div>
+                  </div>
+                  
+                  {/* 该时间段的日志 */}
+                  <div className="space-y-1 pl-2">
+                    {group.logs.map((log, index) => (
+                      <div
+                        key={`${groupIndex}-${index}`}
+                        className={`flex gap-2 text-sm p-2 rounded hover:bg-muted/50 transition-colors ${
+                          log.type === 'error' ? 'text-destructive' :
+                          log.type === 'success' ? 'text-green-600' :
+                          log.type === 'warning' ? 'text-yellow-600' :
+                          'text-foreground'
+                        }`}
+                      >
+                        <span className="text-muted-foreground text-xs font-mono shrink-0 w-16">
+                          {new Date(log.timestamp).toLocaleTimeString('en-US', { 
+                            hour12: false, 
+                            hour: '2-digit', 
+                            minute: '2-digit', 
+                            second: '2-digit' 
+                          })}
+                        </span>
+                        <Badge variant="outline" className="shrink-0 h-5 text-xs">
+                          {log.type}
+                        </Badge>
+                        <span className="flex-1">{log.message}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))
             )}
@@ -425,9 +512,37 @@ export function CrewExecutionMonitor({
                 variant="outline"
                 onClick={() => {
                   navigator.clipboard.writeText(result)
+                  toast({ title: "已复制到剪贴板", duration: 2000 })
                 }}
               >
                 Copy
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  // 下载为JSON文件（包含完整执行信息）
+                  const exportData = {
+                    execution_id: executionId,
+                    crew_id: crewId,
+                    crew_name: crewName,
+                    duration,
+                    timestamp: new Date().toISOString(),
+                    result,
+                    logs
+                  }
+                  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `crew-result-${executionId || 'unknown'}.json`
+                  document.body.appendChild(a)
+                  a.click()
+                  document.body.removeChild(a)
+                  URL.revokeObjectURL(url)
+                }}
+              >
+                Export JSON
               </Button>
               <Button
                 size="sm"
@@ -452,7 +567,7 @@ export function CrewExecutionMonitor({
                 variant="outline"
                 onClick={() => {
                   // 下载为Markdown文件
-                  const markdown = `# CrewAI Execution Result\n\n**Execution ID**: ${executionId}\n**Duration**: ${duration.toFixed(2)}s\n**Timestamp**: ${new Date().toISOString()}\n\n## Result\n\n${result}\n\n## Logs\n\n${logs.map(log => `- [${new Date(log.timestamp).toLocaleTimeString()}] ${log.message}`).join('\n')}`
+                  const markdown = `# CrewAI Execution Result\n\n**Execution ID**: ${executionId}\n**Crew Name**: ${crewName}\n**Duration**: ${duration.toFixed(2)}s\n**Timestamp**: ${new Date().toISOString()}\n\n## Result\n\n\`\`\`\n${result}\n\`\`\`\n\n## Execution Logs\n\n${logs.map(log => `- [${new Date(log.timestamp).toLocaleTimeString()}] **${log.type}**: ${log.message}`).join('\n')}`
                   const blob = new Blob([markdown], { type: 'text/markdown' })
                   const url = URL.createObjectURL(blob)
                   const a = document.createElement('a')

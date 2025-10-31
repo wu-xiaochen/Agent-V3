@@ -353,29 +353,81 @@ export const thinkingAPI = {
   },
 }
 
-// ==================== Knowledge Base API (待实现) ====================
+// ==================== Knowledge Base API ====================
+
+import { knowledgeBaseApi, type KnowledgeBase, type Document, type CreateKnowledgeBaseRequest, type UpdateKnowledgeBaseRequest, type UploadDocumentRequest, type SearchRequest, type SearchResponse } from './api/knowledge-base'
 
 export const knowledgeAPI = {
   /**
-   * 列出知识库 (TODO: 需要后端实现)
+   * 列出所有知识库
    */
   async listKnowledgeBases(): Promise<KnowledgeBase[]> {
-    // 暂时返回模拟数据
+    const response = await knowledgeBaseApi.list()
+    if (response.success) {
+      return response.knowledge_bases
+    }
     return []
   },
 
   /**
-   * 创建知识库 (TODO: 需要后端实现)
+   * 创建知识库
    */
-  async createKnowledgeBase(name: string, description: string): Promise<KnowledgeBase> {
-    throw new Error("Not implemented yet")
+  async createKnowledgeBase(request: CreateKnowledgeBaseRequest): Promise<KnowledgeBase> {
+    const response = await knowledgeBaseApi.create(request)
+    if (response.success) {
+      return response.knowledge_base
+    }
+    throw new Error(response.message || "创建知识库失败")
   },
 
   /**
-   * 上传文档到知识库 (TODO: 需要后端实现)
+   * 获取知识库详情
    */
-  async uploadDocument(kbId: string, file: File): Promise<Document> {
-    throw new Error("Not implemented yet")
+  async getKnowledgeBase(kbId: string): Promise<KnowledgeBase> {
+    const response = await knowledgeBaseApi.get(kbId)
+    if (response.success) {
+      return response.knowledge_base
+    }
+    throw new Error("获取知识库失败")
+  },
+
+  /**
+   * 更新知识库
+   */
+  async updateKnowledgeBase(kbId: string, request: UpdateKnowledgeBaseRequest): Promise<KnowledgeBase> {
+    const response = await knowledgeBaseApi.update(kbId, request)
+    if (response.success) {
+      return response.knowledge_base
+    }
+    throw new Error(response.message || "更新知识库失败")
+  },
+
+  /**
+   * 删除知识库
+   */
+  async deleteKnowledgeBase(kbId: string): Promise<void> {
+    const response = await knowledgeBaseApi.delete(kbId)
+    if (!response.success) {
+      throw new Error(response.message || "删除知识库失败")
+    }
+  },
+
+  /**
+   * 上传文档到知识库
+   */
+  async uploadDocument(kbId: string, request: UploadDocumentRequest): Promise<Document> {
+    const response = await knowledgeBaseApi.uploadDocument(kbId, request)
+    if (response.success) {
+      return response.document
+    }
+    throw new Error(response.message || "上传文档失败")
+  },
+
+  /**
+   * 检索知识库
+   */
+  async searchKnowledgeBase(kbId: string, request: SearchRequest): Promise<SearchResponse> {
+    return await knowledgeBaseApi.search(kbId, request)
   },
 }
 
@@ -442,6 +494,62 @@ export const crewaiAPI = {
     message: string
   }> {
     const response = await apiClient.post(`/api/crewai/crews/${crewId}/execute`, { inputs })
+    return response.data
+  },
+  
+  /**
+   * 获取执行状态
+   */
+  async getExecutionStatus(executionId: string): Promise<{
+    success: boolean
+    status: any
+  }> {
+    const response = await apiClient.get(`/api/crewai/execution/${executionId}/status`)
+    return response.data
+  },
+  
+  /**
+   * 暂停执行
+   */
+  async pauseExecution(executionId: string): Promise<{
+    success: boolean
+    message: string
+  }> {
+    const response = await apiClient.post(`/api/crewai/execution/${executionId}/pause`)
+    return response.data
+  },
+  
+  /**
+   * 恢复执行
+   */
+  async resumeExecution(executionId: string): Promise<{
+    success: boolean
+    message: string
+  }> {
+    const response = await apiClient.post(`/api/crewai/execution/${executionId}/resume`)
+    return response.data
+  },
+  
+  /**
+   * 取消执行
+   */
+  async cancelExecution(executionId: string): Promise<{
+    success: boolean
+    message: string
+  }> {
+    const response = await apiClient.post(`/api/crewai/execution/${executionId}/cancel`)
+    return response.data
+  },
+  
+  /**
+   * 获取执行日志
+   */
+  async getExecutionLogs(executionId: string, limit: number = 100): Promise<{
+    success: boolean
+    logs: any[]
+    count: number
+  }> {
+    const response = await apiClient.get(`/api/crewai/execution/${executionId}/logs?limit=${limit}`)
     return response.data
   },
 }

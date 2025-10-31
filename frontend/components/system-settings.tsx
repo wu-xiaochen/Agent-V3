@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Save, RefreshCw, Moon, Sun, Globe, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { useToast } from "@/hooks/use-toast"
+import { getSystemConfig, updateSystemConfig, resetSystemConfig, type SystemConfig } from "@/lib/api/system"
 
 interface Settings {
   // 通用设置
@@ -38,6 +40,7 @@ interface Settings {
 }
 
 export function SystemSettings() {
+  const { toast } = useToast()
   const [settings, setSettings] = useState<Settings>({
     language: "zh-CN",
     theme: "dark",
@@ -55,46 +58,111 @@ export function SystemSettings() {
     logLevel: "info",
   })
 
+  const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [apiKeyValue, setApiKeyValue] = useState<string>("") // 单独的API Key状态
+
+  // 加载系统配置
+  useEffect(() => {
+    const loadConfig = async () => {
+      setIsLoading(true)
+      try {
+        const config = await getSystemConfig()
+        
+        // 从后端配置映射到前端设置
+        setSettings(prev => ({
+          ...prev,
+          defaultProvider: config.llm_provider || prev.defaultProvider,
+          defaultModel: config.default_model || prev.defaultModel,
+          temperature: config.temperature ?? prev.temperature,
+          maxTokens: config.max_tokens ?? prev.maxTokens,
+          apiBaseUrl: config.base_url || prev.apiBaseUrl,
+        }))
+        
+        // API Key保持脱敏显示
+        setApiKeyValue(config.api_key_masked || "***")
+      } catch (error) {
+        console.error("加载配置失败:", error)
+        toast({
+          title: "加载配置失败",
+          description: error instanceof Error ? error.message : "无法从服务器加载配置",
+          variant: "destructive"
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadConfig()
+  }, [toast])
 
   const handleSave = async () => {
+   面向后端API保存配置
     setIsSaving(true)
     try {
-      // TODO: 保存设置到后端或 localStorage
-      localStorage.setItem("app-settings", JSON.stringify(settings))
+      await updateSystemConfig({
+        llm_provider: settings.defaultProvider,
+        api_key: apiKeyValue && !apiKeyValue.includes("*") ? apiKeyValue : undefined, // 只有修改时才发送
+        base_url: settings.apiBaseUrl,
+        default_model: settings.defaultModel,
+        temperature: settings.temperature,
+        max_tokens: settings.maxTokens,
+      })
       
-      // 模拟保存延迟
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      toast({
+        title: "保存成功",
+        description: "系统配置已更新",
+      })
       
-      alert("设置已保存")
+      // 重新加载配置以获取最新的脱敏API Key
+      const config = await getSystemConfig()
+      setApiKeyValue(config.api_key_masked || "***")
     } catch (error) {
       console.error("保存设置失败:", error)
-      alert("保存设置失败")
+      toast({
+        title: "保存失败",
+        description: error instanceof Error ? error.message : "无法保存配置",
+        variant: "destructive"
+      })
     } finally {
       setIsSaving(false)
     }
   }
 
-  const handleReset = () => {
-    if (confirm("确定要重置所有设置吗？")) {
-      // 重置为默认值
-      setSettings({
-        language: "zh-CN",
-        theme: "dark",
-        apiBaseUrl: "http://localhost:8000",
-        apiTimeout: 30,
-        defaultProvider: "siliconflow",
-        defaultModel: "deepseek-chat",
-        temperature: 0.7,
-        maxTokens: 2000,
-        enableMemory: true,
-        enableStreaming: true,
-        enableFileUpload: true,
-        enableMultimodal: true,
-        debugMode: false,
-        logLevel: "info",
+  const handleReset = async () => {
+    if (!confirm("确定要重置所有设置为默认值吗？")) {
+      return
+    }
+    
+    setIsSaving(true)
+    try {
+      const defaultConfig = await resetSystemConfig()
+      
+      // 更新前端状态
+      setSettings(prev => ({
+        ...prev,
+        defaultProvider: defaultConfig.llm_provider || "siliconflow",
+        defaultModel: defaultConfig.default_model || "deepseek-chat",
+        temperature: defaultConfig.temperature ?? 0.7,
+        maxTokens: defaultConfig.max_tokens ?? 2000,
+        apiBaseUrl: defaultConfig.base_url || "http://localhost:8000",
+      }))
+      
+      setApiKeyValue(defaultConfig.api_key_masked || "***")
+      
+      toast({
+        title: "重置成功",
+        description: "系统配置已重置为默认值",
       })
-      localStorage.removeItem("app-settings")
+    } catch (error) {
+      console.error("重置配置失败:", error)
+      toast({
+        title: "重置失败",
+        description: error instanceof Error ? error.message : "无法重置配置",
+        variant: "destructive"
+      })
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -118,8 +186,13 @@ export function SystemSettings() {
         </div>
       </div>
 
-      <ScrollArea className="h-[calc(100vh-200px)]">
-        <div className="space-y-6 pr-3">
+      {isLoading ? (
+        <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+          <div className="text-muted-foreground">加载配置中...</div>
+        </div>
+      ) : (
+        <ScrollArea className="h-[calc(100vh-200px)]">
+          <div className="space-y-6 pr-3">
           {/* 通用设置 */}
           <Card className="p-4 space-y-4">
             <div className="flex items-center gap-2">
@@ -215,9 +288,40 @@ export function SystemSettings() {
             </div>
           </Card>
 
+          {/* LLM Provider配置 */}
+          <Card className="p-4 space-y-4">
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4" />
+              <h4 className="font-medium text-sm">LLM Provider 配置</h4>
+            </div>
+            <Separator />
+            
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="api-key" className="text-xs">
+                  API Key
+                </Label>
+                <Input
+                  id="api-key"
+                  type="password"
+                  value={apiKeyValue}
+                  onChange={(e) => setApiKeyValue(e.target.value)}
+                  className="h-8"
+                  placeholder="输入API Key（留空则不修改）"
+                />
+                <p className="text-xs text-muted-foreground">
+                  如果显示为 ***，表示当前已保存的Key（输入新值将覆盖）
+                </p>
+              </div>
+            </div>
+          </Card>
+
           {/* LLM设置 */}
           <Card className="p-4 space-y-4">
-            <h4 className="font-medium text-sm">LLM 配置</h4>
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4" />
+              <h4 className="font-medium text-sm">LLM 配置</h4>
+            </div>
             <Separator />
             
             <div className="space-y-3">
@@ -377,6 +481,7 @@ export function SystemSettings() {
           </div>
         </div>
       </ScrollArea>
+      )}
     </div>
   )
 }

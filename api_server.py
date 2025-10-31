@@ -552,6 +552,9 @@ from src.services.system_config_service import SystemConfigService
 # 创建系统配置服务实例
 system_config_service = SystemConfigService()
 
+# 🆕 CrewAI执行服务
+from src.services.crewai_execution_service import crewai_execution_service
+
 # 🆕 知识库服务
 from src.models.knowledge_base import (
     KnowledgeBaseCreate,
@@ -1484,6 +1487,140 @@ async def execute_crew(crew_id: str, inputs: dict = {}):
             "error": str(e),
             "traceback": error_trace
         }
+
+
+# ==================== CrewAI执行状态API ====================
+
+@app.get("/api/crewai/execution/{execution_id}/status", response_model=Dict[str, Any])
+async def get_execution_status(execution_id: str):
+    """
+    获取执行状态
+    
+    Args:
+        execution_id: 执行ID
+        
+    Returns:
+        执行状态信息
+    """
+    try:
+        status = crewai_execution_service.get_status(execution_id)
+        if not status:
+            raise HTTPException(status_code=404, detail="执行不存在")
+        
+        return {
+            "success": True,
+            "status": status
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取执行状态失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/crewai/execution/{execution_id}/pause", response_model=Dict[str, Any])
+async def pause_execution(execution_id: str):
+    """
+    暂停执行
+    
+    Args:
+        execution_id: 执行ID
+        
+    Returns:
+        操作结果
+    """
+    try:
+        success = crewai_execution_service.pause_execution(execution_id)
+        if not success:
+            raise HTTPException(status_code=400, detail="无法暂停执行")
+        
+        return {
+            "success": True,
+            "message": "执行已暂停"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"暂停执行失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/crewai/execution/{execution_id}/resume", response_model=Dict[str, Any])
+async def resume_execution(execution_id: str):
+    """
+    恢复执行
+    
+    Args:
+        execution_id: 执行ID
+        
+    Returns:
+        操作结果
+    """
+    try:
+        success = crewai_execution_service.resume_execution(execution_id)
+        if not success:
+            raise HTTPException(status_code=400, detail="无法恢复执行")
+        
+        return {
+            "success": True,
+            "message": "执行已恢复"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"恢复执行失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/crewai/execution/{execution_id}/cancel", response_model=Dict[str, Any])
+async def cancel_execution(execution_id: str):
+    """
+    取消执行
+    
+    Args:
+        execution_id: 执行ID
+        
+    Returns:
+        操作结果
+    """
+    try:
+        success = crewai_execution_service.cancel_execution(execution_id)
+        if not success:
+            raise HTTPException(status_code=400, detail="无法取消执行")
+        
+        return {
+            "success": True,
+            "message": "执行已取消"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"取消执行失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/crewai/execution/{execution_id}/logs", response_model=Dict[str, Any])
+async def get_execution_logs(execution_id: str, limit: int = 100):
+    """
+    获取执行日志
+    
+    Args:
+        execution_id: 执行ID
+        limit: 日志数量限制
+        
+    Returns:
+        日志列表
+    """
+    try:
+        logs = crewai_execution_service.get_recent_logs(execution_id, limit)
+        return {
+            "success": True,
+            "logs": logs,
+            "count": len(logs)
+        }
+    except Exception as e:
+        logger.error(f"获取执行日志失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 class CrewExecutionRequest(BaseModel):
