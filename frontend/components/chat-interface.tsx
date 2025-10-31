@@ -155,7 +155,7 @@ export function ChatInterface() {
   }>>({})
   
   // 当前会话的思维状态
-  const currentThinkingState = sessionThinkingStates[currentSession] || { isThinking: false, thinkingChain: [] }
+  const currentThinkingState = (currentSession && sessionThinkingStates[currentSession]) || { isThinking: false, thinkingChain: [] }
   const isThinking = currentThinkingState.isThinking
   const thinkingChain = currentThinkingState.thinkingChain
   const [messageThinkingChains, setMessageThinkingChains] = useState<Record<string, any[]>>({})  // 🆕 每条消息的思维链
@@ -163,6 +163,7 @@ export function ChatInterface() {
   
   // 🆕 辅助函数：更新当前会话的思维状态
   const updateSessionThinking = (updates: { isThinking?: boolean; thinkingChain?: any[] }) => {
+    if (!currentSession) return
     setSessionThinkingStates(prev => ({
       ...prev,
       [currentSession]: {
@@ -397,9 +398,10 @@ export function ChatInterface() {
                   // 🆕 增强的JSON提取函数 (根据 OPTIMIZATION_RECOMMENDATIONS.md 优化)
                   const extractCrewConfig = (content: string | object): any => {
                     // 1. 对象类型直接提取
-                    if (typeof content === 'object') {
+                    if (typeof content === 'object' && content !== null) {
                       console.log("✅ observation是对象，直接提取")
-                      const config = content.crew_config || content.config || content
+                      const configObj = content as Record<string, any>
+                      const config = configObj.crew_config || configObj.config || configObj
                       return validateAndCleanConfig(config)
                     }
                     
@@ -795,8 +797,7 @@ export function ChatInterface() {
         status: error.response?.status
       })
       
-      updateSessionThinking({ isThinking: false })
-      setToolCalls([])
+      updateSessionThinking({ isThinking: false, thinkingChain: [] })
       
       const errorMessage = {
         id: `msg-${Date.now()}-error`,
@@ -1010,7 +1011,7 @@ export function ChatInterface() {
                                   ...f, 
                                   status: 'success' as const, 
                                   url: result.download_url,
-                                  parsed: result.parsed_content,
+                                  parsed: (result as any).parsed_content || undefined,
                                   filename: result.filename  // 🆕 保存文件名
                                 }
                               : f
@@ -1020,7 +1021,7 @@ export function ChatInterface() {
                         // 🆕 不再自动显示解析结果，等待用户发送消息时再使用
                         console.log(`✅ 文件上传成功: ${result.filename}`)
                       } else {
-                        throw new Error(result.error || 'Upload failed')
+                        throw new Error((result as any).error || 'Upload failed')
                       }
                     } catch (error) {
                       console.error("文件上传失败:", error)

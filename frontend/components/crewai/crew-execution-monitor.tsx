@@ -6,6 +6,9 @@ import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { oneDark, vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { useAppStore } from "@/lib/store"
 import { 
   Play, 
   Pause, 
@@ -46,6 +49,7 @@ export function CrewExecutionMonitor({
   onComplete,
   onError
 }: CrewExecutionMonitorProps) {
+  const darkMode = useAppStore(state => state.darkMode)
   const [isRunning, setIsRunning] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [executionId, setExecutionId] = useState<string | null>(null)
@@ -469,36 +473,57 @@ export function CrewExecutionMonitor({
               {/* 尝试检测JSON并格式化 */}
               {(() => {
                 try {
-                  // 尝试解析为JSON
+                  // 尝试解析为JSON - 使用语法高亮
                   const jsonMatch = result.match(/\{[\s\S]*\}|\[[\s\S]*\]/)
                   if (jsonMatch) {
-                    const parsed = JSON.parse(jsonMatch[0])
-                    return (
-                      <div className="space-y-2">
-                        <div className="text-xs text-muted-foreground">Formatted JSON:</div>
-                        <pre className="text-sm overflow-x-auto p-3 bg-background rounded border">
-                          <code className="language-json">
-                            {JSON.stringify(parsed, null, 2)}
-                          </code>
-                        </pre>
-                      </div>
-                    )
+                    try {
+                      const parsed = JSON.parse(jsonMatch[0])
+                      const jsonString = JSON.stringify(parsed, null, 2)
+                      return (
+                        <div className="space-y-2">
+                          <div className="text-xs text-muted-foreground">Formatted JSON:</div>
+                          <SyntaxHighlighter
+                            language="json"
+                            style={darkMode ? oneDark : vscDarkPlus}
+                            customStyle={{
+                              borderRadius: '0.5rem',
+                              fontSize: '0.875rem',
+                              margin: 0,
+                            }}
+                            PreTag="div"
+                          >
+                            {jsonString}
+                          </SyntaxHighlighter>
+                        </div>
+                      )
+                    } catch (e) {
+                      // JSON解析失败，继续其他格式化
+                    }
                   }
                 } catch (e) {
                   // 不是JSON，继续
                 }
                 
-                // 检测代码块
+                // 检测代码块 - 使用语法高亮
                 const codeBlockMatch = result.match(/```(\w+)?\n([\s\S]*?)```/)
                 if (codeBlockMatch) {
                   const language = codeBlockMatch[1] || 'text'
-                  const code = codeBlockMatch[2]
+                  const code = codeBlockMatch[2].trim()
                   return (
                     <div className="space-y-2">
                       <div className="text-xs text-muted-foreground">Code Block ({language}):</div>
-                      <pre className="text-sm overflow-x-auto p-3 bg-background rounded border">
-                        <code className={`language-${language}`}>{code}</code>
-                      </pre>
+                      <SyntaxHighlighter
+                        language={language}
+                        style={darkMode ? oneDark : vscDarkPlus}
+                        customStyle={{
+                          borderRadius: '0.5rem',
+                          fontSize: '0.875rem',
+                          margin: 0,
+                        }}
+                        PreTag="div"
+                      >
+                        {code}
+                      </SyntaxHighlighter>
                     </div>
                   )
                 }
