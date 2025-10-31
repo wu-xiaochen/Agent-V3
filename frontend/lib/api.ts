@@ -2,7 +2,7 @@
  * API 客户端 - 与后端 FastAPI 服务通信
  */
 
-import type { Message, FileAttachment, KnowledgeBase, Document } from "./types"
+import type { Message, FileAttachment } from "./types"
 
 // 从api-client导入以避免循环依赖
 import { apiClient } from "./api-client"
@@ -421,6 +421,27 @@ export const knowledgeAPI = {
       return response.document
     }
     throw new Error(response.message || "上传文档失败")
+  },
+
+  /**
+   * 列出知识库中的所有文档
+   */
+  async listDocuments(kbId: string): Promise<Document[]> {
+    const response = await knowledgeBaseApi.listDocuments(kbId)
+    if (response.success) {
+      return response.documents
+    }
+    return []
+  },
+
+  /**
+   * 删除文档
+   */
+  async deleteDocument(kbId: string, docId: string): Promise<void> {
+    const response = await knowledgeBaseApi.deleteDocument(kbId, docId)
+    if (!response.success) {
+      throw new Error(response.message || "删除文档失败")
+    }
   },
 
   /**

@@ -81,6 +81,84 @@ class KnowledgeBaseService:
         """获取文档元数据文件路径"""
         return self._get_kb_path(kb_id) / "documents" / f"{doc_id}.json"
     
+    def list_documents(self, kb_id: str) -> List[Document]:
+        """
+        列出知识库中的所有文档
+        
+        Args:
+            kb_id: 知识库ID
+            
+        Returns:
+            文档列表
+        """
+        kb = self.get_knowledge_base(kb_id)
+        if not kb:
+            return []
+        
+        docs_dir = self._get_kb_path(kb_id) / "documents"
+        if not docs_dir.exists():
+            return []
+        
+        documents = []
+        for doc_file in docs_dir.glob("*.json"):
+            try:
+                with open(doc_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    documents.append(Document(**data))
+            except (json.JSONDecodeError, TypeError, ValueError) as e:
+                logger.warning(f"⚠️  读取文档元数据失败 {doc_file}: {e}")
+        
+        # 按创建时间倒序排序
+        documents.sort(key=lambda x: x.created_at, reverse=True)
+        return documents
+    
+    def delete_document(self, kb_id: str, doc_id: str) -> bool:
+        """
+        删除知识库中的文档
+        
+        Args:
+            kb_id: 知识库ID
+            doc_id: 文档ID
+            
+        Returns:
+            是否删除成功
+        """
+        kb = self.get_knowledge_base(kb_id)
+        if not kb:
+            return False
+        
+        doc_meta_file = self._get_doc_meta_file(kb_id, doc_id)
+        if not doc_meta_file.exists():
+            return False
+        
+        try:
+            # 从向量数据库中删除相关chunks
+            if self.vector_db:
+                try:
+                    collection = self.vector_db.get_collection(name=kb_id)
+                    # ChromaDB支持where条件删除
+                    collection.delete(where={"doc_id": doc_id})
+                    logger.info(f"✅ 向量数据库chunks删除成功: {doc_id}")
+                except Exception as e:
+                    logger.warning(f"⚠️  删除向量数据失败: {e}")
+            
+            # 删除文档元数据文件
+            doc_meta_file.unlink()
+            
+            # 更新知识库文档计数
+            kb.document_count = max(0, kb.document_count - 1)
+            kb.updated_at = datetime.now().isoformat()
+            meta_file = self._get_kb_meta_file(kb_id)
+            with open(meta_file, "w", encoding="utf-8") as f:
+                json.dump(kb.model_dump(), f, indent=2, ensure_ascii=False)
+            
+            logger.info(f"✅ 文档删除成功: {doc_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ 删除文档失败: {e}")
+            return False
+    
     def create_knowledge_base(self, request: KnowledgeBaseCreate) -> KnowledgeBase:
         """
         创建知识库

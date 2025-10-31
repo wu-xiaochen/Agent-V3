@@ -384,10 +384,10 @@ class CrewAIRuntime:
                     if tool_names:
                         self.logger.info(f"智能体 {agent_name} ({agent_role_type}) 配置了工具: {tool_names}")
                         
-                        # 创建CrewAI兼容的工具
+                        # 创建CrewAI兼容的工具（传递agent_config以支持知识库工具）
                         from src.agents.shared.crewai_tools import create_crewai_tools
                         try:
-                            agent_tools = create_crewai_tools(tool_names)
+                            agent_tools = create_crewai_tools(tool_names, agent_config)
                             self.logger.info(f"已为智能体创建 {len(agent_tools)} 个CrewAI工具")
                         except Exception as e:
                             self.logger.error(f"创建CrewAI工具失败: {e}")

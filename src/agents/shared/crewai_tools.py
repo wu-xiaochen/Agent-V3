@@ -147,12 +147,13 @@ class CrewAIN8NGeneratorTool(BaseTool):
         return tool._run(workflow_description=workflow_description)
 
 
-def create_crewai_tools(tool_names: list = None) -> list:
+def create_crewai_tools(tool_names: list = None, agent_config: dict = None) -> list:
     """
     创建CrewAI工具列表
     
     Args:
         tool_names: 工具名称列表，如果为None则返回所有工具
+        agent_config: Agent配置（用于获取知识库信息）
         
     Returns:
         CrewAI工具列表
@@ -168,8 +169,55 @@ def create_crewai_tools(tool_names: list = None) -> list:
         return list(all_tools.values())
     
     tools = []
+    knowledge_bases = agent_config.get("knowledge_bases", []) if agent_config else []
+    
     for name in tool_names:
-        if name in all_tools:
+        # 检查是否是知识库搜索工具
+        if name.startswith("knowledge_base_search_"):
+            kb_id = name.replace("knowledge_base_search_", "")
+            try:
+                from src.agents.shared.knowledge_base_tool import create_knowledge_base_tool
+                from src.services.knowledge_base_service import KnowledgeBaseService
+                
+                # 获取知识库信息
+                kb_service = KnowledgeBaseService()
+                kb = kb_service.get_knowledge_base(kb_id)
+                
+                if kb:
+                    # 创建知识库工具（转换为CrewAI工具格式）
+                    from crewai.tools import tool
+                    
+                    # 创建包装函数
+                    kb_name = kb.name
+                    kb_desc = f"""在知识库 "{kb_name}" 中搜索相关信息。
+
+使用场景：
+- 需要查找已上传的文档内容
+- 需要获取特定主题的相关信息
+- 需要引用知识库中的知识来回答问题
+
+参数：
+- query: 搜索查询词（必需）
+- top_k: 返回结果数量（可选，默认5条）
+
+返回：相关文档片段列表，包含内容和相似度分数
+"""
+                    
+                    @tool(f"knowledge_base_search_{kb_id}")
+                    def kb_search_tool(query: str, top_k: int = 5) -> str:
+                        """知识库搜索工具"""
+                        kb_tool = create_knowledge_base_tool(kb_id, kb_name)
+                        return kb_tool._run(query, kb_id, top_k)
+                    
+                    kb_search_tool.description = kb_desc
+                    tools.append(kb_search_tool)
+                    logging.info(f"✅ 已添加知识库工具: {kb.name} (ID: {kb_id})")
+                else:
+                    logging.warning(f"⚠️  知识库不存在: {kb_id}，跳过工具创建")
+            except Exception as e:
+                logging.error(f"❌ 创建知识库工具失败 ({kb_id}): {e}")
+                # 不阻塞其他工具的创建
+        elif name in all_tools:
             tools.append(all_tools[name])
     
     return tools

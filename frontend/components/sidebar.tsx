@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { MessageSquare, Plus, Database, Users, ChevronLeft, ChevronRight, Trash2, RefreshCw, Edit2, Settings } from "lucide-react"
+import { MessageSquare, Plus, Database, Users, ChevronLeft, ChevronRight, Trash2, RefreshCw, Edit2, Settings, Wrench } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useAppStore } from "@/lib/store"
@@ -408,25 +408,21 @@ export function Sidebar({ collapsed: externalCollapsed }: SidebarProps = {}) {
                 <Settings className="h-4 w-4" />
                 {!collapsed && <span className="ml-2 text-sm">Settings</span>}
               </Button>
+              <Button 
+                variant="ghost" 
+                className="w-full justify-start text-sidebar-foreground"
+                onClick={() => {
+                  setActiveTab("tools")
+                  setToolPanelOpen(true)
+                }}
+              >
+                <Wrench className="h-4 w-4" />
+                {!collapsed && <span className="ml-2 text-sm">Tools</span>}
+              </Button>
             </div>
           </>
         )}
       </ScrollArea>
-
-      {/* 底部按钮 */}
-      <div className="p-3 border-t border-sidebar-border space-y-1">
-        <Button 
-          variant="ghost" 
-          className="w-full justify-start text-sidebar-foreground"
-          onClick={() => {
-            setToolPanelOpen(true)
-          }}
-        >
-          <Database className="h-4 w-4" />
-          {!collapsed && <span className="ml-2 text-sm">Tools</span>}
-        </Button>
-        
-      </div>
     </div>
   )
 }

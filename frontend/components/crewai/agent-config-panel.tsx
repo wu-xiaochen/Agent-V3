@@ -14,6 +14,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
 import { api } from "@/lib/api"
 import type { ToolInfo } from "@/lib/api/tools"
+import type { KnowledgeBase } from "@/lib/api/knowledge-base"
+import { Database } from "lucide-react"
 
 interface AgentConfig {
   id: string
@@ -26,6 +28,7 @@ interface AgentConfig {
   max_iter?: number
   memory?: boolean
   tools?: string[]
+  knowledge_bases?: string[]  // 知识库ID列表
 }
 
 interface AgentConfigPanelProps {
@@ -40,6 +43,9 @@ export function AgentConfigPanel({ agent, onSave, onClose }: AgentConfigPanelPro
   const [availableTools, setAvailableTools] = useState<ToolInfo[]>([])
   const [loadingTools, setLoadingTools] = useState(false)
   const [toolSelectorOpen, setToolSelectorOpen] = useState(false)
+  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([])
+  const [loadingKBs, setLoadingKBs] = useState(false)
+  const [kbSelectorOpen, setKbSelectorOpen] = useState(false)
 
   useEffect(() => {
     setFormData(agent)
@@ -64,6 +70,23 @@ export function AgentConfigPanel({ agent, onSave, onClose }: AgentConfigPanelPro
     loadTools()
   }, [])
 
+  // 🆕 加载知识库列表
+  useEffect(() => {
+    const loadKnowledgeBases = async () => {
+      try {
+        setLoadingKBs(true)
+        const kbs = await api.knowledge.listKnowledgeBases()
+        setKnowledgeBases(kbs)
+        console.log(`✅ 加载了 ${kbs.length} 个知识库`)
+      } catch (error) {
+        console.error('❌ 加载知识库列表失败:', error)
+      } finally {
+        setLoadingKBs(false)
+      }
+    }
+    loadKnowledgeBases()
+  }, [])
+
   const handleChange = (field: keyof AgentConfig, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
@@ -85,6 +108,33 @@ export function AgentConfigPanel({ agent, onSave, onClose }: AgentConfigPanelPro
       ...prev,
       tools: (prev.tools || []).filter(t => t !== tool)
     }))
+  }
+
+  // 🆕 添加知识库
+  const handleAddKnowledgeBase = (kbId: string) => {
+    if (!formData.knowledge_bases?.includes(kbId)) {
+      setFormData(prev => ({
+        ...prev,
+        knowledge_bases: [...(prev.knowledge_bases || []), kbId]
+      }))
+      // 自动添加知识库检索工具到工具列表
+      const kbToolName = `knowledge_base_search_${kbId}`
+      if (!formData.tools?.includes(kbToolName)) {
+        handleAddTool(kbToolName)
+      }
+      setKbSelectorOpen(false)
+    }
+  }
+
+  // 🆕 移除知识库
+  const handleRemoveKnowledgeBase = (kbId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      knowledge_bases: (prev.knowledge_bases || []).filter(kb => kb !== kbId)
+    }))
+    // 同时移除对应的工具
+    const kbToolName = `knowledge_base_search_${kbId}`
+    handleRemoveTool(kbToolName)
   }
 
   const handleSave = () => {
@@ -255,6 +305,91 @@ export function AgentConfigPanel({ agent, onSave, onClose }: AgentConfigPanelPro
                     )
                   })}
                 </div>
+              </div>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* 🆕 Knowledge Bases */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>Knowledge Bases</Label>
+              {loadingKBs && (
+                <span className="text-xs text-muted-foreground">Loading...</span>
+              )}
+            </div>
+            
+            {/* 知识库选择器 */}
+            <Popover open={kbSelectorOpen} onOpenChange={setKbSelectorOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  disabled={loadingKBs || knowledgeBases.length === 0}
+                >
+                  <Database className="mr-2 h-4 w-4" />
+                  {loadingKBs ? "Loading knowledge bases..." : 
+                   knowledgeBases.length === 0 ? "No knowledge bases available" :
+                   "Select knowledge base"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[350px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search knowledge bases..." />
+                  <CommandEmpty>No knowledge bases found.</CommandEmpty>
+                  <CommandGroup>
+                    <ScrollArea className="h-[200px]">
+                      {knowledgeBases
+                        .filter(kb => !formData.knowledge_bases?.includes(kb.id))
+                        .map((kb) => (
+                          <CommandItem
+                            key={kb.id}
+                            value={kb.name}
+                            onSelect={() => handleAddKnowledgeBase(kb.id)}
+                            className="cursor-pointer"
+                          >
+                            <Database className="mr-2 h-4 w-4 text-muted-foreground" />
+                            <div className="flex-1">
+                              <div className="font-medium">{kb.name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {kb.description || "No description"} • {kb.document_count} documents
+                              </div>
+                            </div>
+                          </CommandItem>
+                        ))}
+                    </ScrollArea>
+                  </CommandGroup>
+                </Command>
+              </PopoverContent>
+            </Popover>
+
+            {/* 已选知识库列表 */}
+            {formData.knowledge_bases && formData.knowledge_bases.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-sm text-muted-foreground">
+                  Selected knowledge bases ({formData.knowledge_bases.length}):
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {formData.knowledge_bases.map(kbId => {
+                    const kb = knowledgeBases.find(k => k.id === kbId)
+                    return (
+                      <Badge
+                        key={kbId}
+                        variant="secondary"
+                        className="cursor-pointer hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                        onClick={() => handleRemoveKnowledgeBase(kbId)}
+                      >
+                        <Database className="mr-1 h-3 w-3" />
+                        {kb?.name || kbId}
+                        <X className="ml-1 h-3 w-3" />
+                      </Badge>
+                    )
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  💡 Knowledge base search tools are automatically added to the tools list
+                </p>
               </div>
             )}
           </div>

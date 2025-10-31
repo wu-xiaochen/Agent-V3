@@ -27,22 +27,8 @@ export interface ChatSession {
   lastMessageAt: Date
 }
 
-export interface KnowledgeBase {
-  id: string
-  name: string
-  documentCount: number
-  tags: string[]
-  createdAt: Date
-}
-
-export interface Document {
-  id: string
-  name: string
-  type: string
-  size: number
-  uploadedAt: Date
-  tags: string[]
-}
+// KnowledgeBase 和 Document 类型已移至 frontend/lib/api/knowledge-base.ts
+// 如需使用，请从该文件导入
 
 export interface Agent {
   id: string

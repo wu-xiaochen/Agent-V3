@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/hooks/use-toast"
 import { getSystemConfig, updateSystemConfig, resetSystemConfig, type SystemConfig } from "@/lib/api/system"
+import { useAppStore } from "@/lib/store"
 
 interface Settings {
   // 通用设置
@@ -41,6 +42,7 @@ interface Settings {
 
 export function SystemSettings() {
   const { toast } = useToast()
+  const { setDarkMode } = useAppStore()
   const [settings, setSettings] = useState<Settings>({
     language: "zh-CN",
     theme: "dark",
@@ -168,6 +170,22 @@ export function SystemSettings() {
 
   const updateSetting = <K extends keyof Settings>(key: K, value: Settings[K]) => {
     setSettings((prev) => ({ ...prev, [key]: value }))
+    
+    // 如果是主题切换，同步更新全局状态和localStorage
+    if (key === "theme") {
+      const themeValue = value as "light" | "dark" | "system"
+      if (themeValue === "system") {
+        // 跟随系统
+        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
+        setDarkMode(prefersDark)
+        localStorage.setItem("theme", prefersDark ? "dark" : "light")
+      } else {
+        // 明确指定浅色或深色
+        const isDark = themeValue === "dark"
+        setDarkMode(isDark)
+        localStorage.setItem("theme", themeValue)
+      }
+    }
   }
 
   return (

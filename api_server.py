@@ -2353,6 +2353,40 @@ async def upload_document(kb_id: str, request: DocumentUploadRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/knowledge-bases/{kb_id}/documents", response_model=Dict[str, Any])
+async def list_documents(kb_id: str):
+    """列出知识库中的所有文档"""
+    try:
+        documents = knowledge_base_service.list_documents(kb_id)
+        return {
+            "success": True,
+            "documents": [doc.model_dump() for doc in documents],
+            "total": len(documents)
+        }
+    except Exception as e:
+        logger.error(f"列出文档失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/knowledge-bases/{kb_id}/documents/{doc_id}", response_model=Dict[str, Any])
+async def delete_document(kb_id: str, doc_id: str):
+    """删除知识库中的文档"""
+    try:
+        success = knowledge_base_service.delete_document(kb_id, doc_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="文档不存在")
+        
+        return {
+            "success": True,
+            "message": "文档删除成功"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"删除文档失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/knowledge-bases/{kb_id}/search", response_model=Dict[str, Any])
 async def search_knowledge_base(kb_id: str, request: SearchRequest):
     """检索知识库"""

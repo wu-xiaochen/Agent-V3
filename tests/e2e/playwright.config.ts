@@ -82,14 +82,22 @@ export default defineConfig({
     {
       command: 'cd ../.. && python api_server.py',
       port: 8000,
-      timeout: 30 * 1000,
-      reuseExistingServer: !process.env.CI,
-    },
-    {
-      command: 'cd ../../frontend && npm run dev',
-      port: 3000,
       timeout: 60 * 1000,
       reuseExistingServer: !process.env.CI,
+      stdout: 'ignore',
+      stderr: 'pipe',
+    },
+    {
+      command: 'cd ../../frontend && pnpm dev',
+      port: 3000,
+      timeout: 120 * 1000, // 增加超时时间到120秒，Next.js启动可能需要更长时间
+      reuseExistingServer: !process.env.CI,
+      stdout: 'ignore',
+      stderr: 'pipe',
+      env: {
+        ...process.env,
+        PORT: '3000',
+      },
     },
   ],
 });
